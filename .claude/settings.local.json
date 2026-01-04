@@ -9,7 +9,8 @@
       "Bash(wc:*)",
       "Bash(ls:*)",
       "Skill(manager)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(npm install:*)"
     ]
   }
 }
