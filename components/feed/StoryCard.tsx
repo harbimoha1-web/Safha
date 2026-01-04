@@ -68,6 +68,8 @@ export function StoryCard({ story, isActive, language, isSaved, onSave, onShare 
         source={{ uri: story.image_url || 'https://via.placeholder.com/800x1200' }}
         style={styles.backgroundImage}
         resizeMode="cover"
+        accessible={true}
+        accessibilityLabel={title || undefined}
       >
         {/* Gradient Overlay */}
         <LinearGradient
@@ -105,6 +107,8 @@ export function StoryCard({ story, isActive, language, isSaved, onSave, onShare 
             <TouchableOpacity
               style={styles.readMoreButton}
               onPress={handleReadMore}
+              accessibilityRole="button"
+              accessibilityLabel={isArabic ? 'اقرأ المزيد' : 'Read more'}
             >
               <Text style={styles.readMoreText}>
                 {isArabic ? 'اقرأ المزيد' : 'Read More'}
@@ -124,6 +128,8 @@ export function StoryCard({ story, isActive, language, isSaved, onSave, onShare 
               onPress={handleSave}
               activeOpacity={0.7}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              accessibilityRole="button"
+              accessibilityLabel={isSaved ? (isArabic ? 'إزالة الإشارة المرجعية' : 'Remove bookmark') : (isArabic ? 'حفظ الخبر' : 'Save story')}
             >
               <FontAwesome name={isSaved ? "bookmark" : "bookmark-o"} size={28} color="#fff" />
               <Text style={styles.actionCount}>
@@ -136,6 +142,8 @@ export function StoryCard({ story, isActive, language, isSaved, onSave, onShare 
               onPress={handleShare}
               activeOpacity={0.7}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              accessibilityRole="button"
+              accessibilityLabel={isArabic ? 'مشاركة الخبر' : 'Share story'}
             >
               <FontAwesome name="share" size={28} color="#fff" />
               <Text style={styles.actionCount}>

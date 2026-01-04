@@ -47,6 +47,8 @@ export default function HistoryScreen() {
           <TouchableOpacity
             style={styles.signInButton}
             onPress={() => router.push('/(auth)/login')}
+            accessibilityRole="button"
+            accessibilityLabel={isArabic ? 'تسجيل الدخول لرؤية سجل القراءة' : 'Sign in to view history'}
           >
             <Text style={styles.signInButtonText}>
               {isArabic ? 'تسجيل الدخول' : 'Sign In'}
@@ -116,6 +118,8 @@ export default function HistoryScreen() {
             <TouchableOpacity
               style={styles.storyCard}
               onPress={() => handleStoryPress(item.id)}
+              accessibilityRole="button"
+              accessibilityLabel={(isArabic ? item.title_ar : item.title_en) || undefined}
             >
               {item.image_url && (
                 <Image source={{ uri: item.image_url }} style={styles.storyImage} />

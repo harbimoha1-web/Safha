@@ -98,6 +98,9 @@ export default function ProfileScreen() {
       style={styles.settingsItem}
       onPress={onPress}
       disabled={!onPress}
+      accessibilityRole="button"
+      accessibilityLabel={title}
+      accessibilityState={{ disabled: !onPress }}
     >
       <View style={styles.settingsItemLeft}>
         <FontAwesome name={icon as any} size={20} color={colors.primary} />
@@ -135,7 +138,11 @@ export default function ProfileScreen() {
               {user?.email || 'No email'}
             </Text>
           </View>
-          <TouchableOpacity onPress={handleEditProfile}>
+          <TouchableOpacity
+            onPress={handleEditProfile}
+            accessibilityRole="button"
+            accessibilityLabel={isArabic ? 'تعديل الملف الشخصي' : 'Edit profile'}
+          >
             <FontAwesome name="pencil" size={18} color={colors.primary} />
           </TouchableOpacity>
         </View>
@@ -143,6 +150,8 @@ export default function ProfileScreen() {
         <TouchableOpacity
           style={styles.signInSection}
           onPress={() => router.push('/(auth)/login')}
+          accessibilityRole="button"
+          accessibilityLabel={isArabic ? 'تسجيل الدخول لمزامنة بياناتك' : 'Sign in to sync your data'}
         >
           <View style={styles.signInContent}>
             <FontAwesome name="sign-in" size={24} color={colors.primary} />
@@ -276,7 +285,12 @@ export default function ProfileScreen() {
 
       {/* Sign Out */}
       {isAuthenticated && (
-        <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
+        <TouchableOpacity
+          style={styles.signOutButton}
+          onPress={handleSignOut}
+          accessibilityRole="button"
+          accessibilityLabel={isArabic ? 'تسجيل الخروج' : 'Sign out'}
+        >
           <FontAwesome name="sign-out" size={20} color={colors.error} />
           <Text style={styles.signOutText}>
             {isArabic ? 'تسجيل الخروج' : 'Sign Out'}
@@ -299,7 +313,11 @@ export default function ProfileScreen() {
               <Text style={styles.modalTitle}>
                 {isArabic ? 'تعديل الملف الشخصي' : 'Edit Profile'}
               </Text>
-              <TouchableOpacity onPress={() => setEditModalVisible(false)}>
+              <TouchableOpacity
+                onPress={() => setEditModalVisible(false)}
+                accessibilityRole="button"
+                accessibilityLabel={isArabic ? 'إغلاق' : 'Close'}
+              >
                 <FontAwesome name="times" size={24} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
@@ -314,6 +332,7 @@ export default function ProfileScreen() {
                 onChangeText={setEditName}
                 placeholder={isArabic ? 'أدخل اسمك' : 'Enter your name'}
                 placeholderTextColor={colors.textMuted}
+                accessibilityLabel={isArabic ? 'الاسم الكامل' : 'Full name'}
               />
 
               <Text style={styles.inputLabel}>
@@ -326,6 +345,7 @@ export default function ProfileScreen() {
                 placeholder={isArabic ? 'أدخل اسم المستخدم' : 'Enter username'}
                 placeholderTextColor={colors.textMuted}
                 autoCapitalize="none"
+                accessibilityLabel={isArabic ? 'اسم المستخدم' : 'Username'}
               />
             </View>
 
@@ -333,6 +353,9 @@ export default function ProfileScreen() {
               style={styles.saveButton}
               onPress={handleSaveProfile}
               disabled={isSaving}
+              accessibilityRole="button"
+              accessibilityLabel={isArabic ? 'حفظ التغييرات' : 'Save changes'}
+              accessibilityState={{ disabled: isSaving }}
             >
               {isSaving ? (
                 <ActivityIndicator color={colors.textPrimary} />

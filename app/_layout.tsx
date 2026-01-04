@@ -34,6 +34,8 @@ class AppErrorBoundary extends React.Component<
           <TouchableOpacity
             style={boundaryStyles.retryButton}
             onPress={() => this.setState({ hasError: false, error: null })}
+            accessibilityRole="button"
+            accessibilityLabel="Try again"
           >
             <Text style={boundaryStyles.retryText}>Try Again</Text>
           </TouchableOpacity>
@@ -233,6 +235,8 @@ function RootLayoutNav() {
             // Force re-render by reloading
             router.replace('/');
           }}
+          accessibilityRole="button"
+          accessibilityLabel="Retry connection"
         >
           <Text style={errorStyles.retryText}>Retry</Text>
         </TouchableOpacity>

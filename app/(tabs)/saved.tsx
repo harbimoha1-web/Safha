@@ -44,6 +44,8 @@ export default function SavedScreen() {
       <TouchableOpacity
         style={styles.storyCard}
         onPress={() => handleStoryPress(item.story!.id)}
+        accessibilityRole="button"
+        accessibilityLabel={(isArabic ? item.story!.title_ar : item.story!.title_en) || undefined}
       >
         <Image
           source={{ uri: item.story.image_url || 'https://via.placeholder.com/100' }}
@@ -63,6 +65,8 @@ export default function SavedScreen() {
         <TouchableOpacity
           style={styles.removeButton}
           onPress={() => handleRemove(item)}
+          accessibilityRole="button"
+          accessibilityLabel={isArabic ? 'إزالة من المحفوظات' : 'Remove from saved'}
         >
           <FontAwesome name="bookmark" size={20} color="#007AFF" />
         </TouchableOpacity>
@@ -86,6 +90,8 @@ export default function SavedScreen() {
           <TouchableOpacity
             style={styles.loginButton}
             onPress={() => router.push('/(auth)/login')}
+            accessibilityRole="button"
+            accessibilityLabel={isArabic ? 'تسجيل الدخول لحفظ القصص' : 'Sign in to save stories'}
           >
             <Text style={styles.loginButtonText}>
               {isArabic ? 'تسجيل الدخول' : 'Sign In'}

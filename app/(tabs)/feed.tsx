@@ -127,7 +127,12 @@ export default function FeedScreen() {
             ? 'فشل في تحميل الأخبار'
             : 'Failed to load stories'}
         </Text>
-        <Text style={styles.retryText} onPress={() => refetch()}>
+        <Text
+          style={styles.retryText}
+          onPress={() => refetch()}
+          accessibilityRole="button"
+          accessibilityLabel={settings.language === 'ar' ? 'إعادة المحاولة' : 'Tap to retry'}
+        >
           {settings.language === 'ar' ? 'إعادة المحاولة' : 'Tap to retry'}
         </Text>
       </View>
@@ -157,7 +162,13 @@ export default function FeedScreen() {
             contentContainerStyle={styles.filterContent}
           >
             {selectedTopics.map((topic) => (
-              <View key={topic.id} style={styles.filterChip}>
+              <View
+                key={topic.id}
+                style={styles.filterChip}
+                accessible={true}
+                accessibilityLabel={isArabic ? topic.name_ar : topic.name_en}
+                accessibilityRole="text"
+              >
                 <Text style={styles.filterChipText}>
                   {isArabic ? topic.name_ar : topic.name_en}
                 </Text>
@@ -166,6 +177,8 @@ export default function FeedScreen() {
             <TouchableOpacity
               style={styles.editFiltersButton}
               onPress={() => router.push('/(auth)/onboarding')}
+              accessibilityRole="button"
+              accessibilityLabel={isArabic ? 'تعديل الفلاتر' : 'Edit filters'}
             >
               <FontAwesome name="sliders" size={14} color={colors.primary} />
               <Text style={styles.editFiltersText}>

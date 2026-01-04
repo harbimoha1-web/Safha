@@ -118,18 +118,33 @@ export default function StoryDetailScreen() {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => router.back()}
+          accessibilityRole="button"
+          accessibilityLabel={isArabic ? 'رجوع' : 'Go back'}
+        >
           <FontAwesome name="arrow-left" size={20} color="#fff" />
         </TouchableOpacity>
         <View style={styles.headerActions}>
-          <TouchableOpacity style={styles.headerButton} onPress={handleSave}>
+          <TouchableOpacity
+            style={styles.headerButton}
+            onPress={handleSave}
+            accessibilityRole="button"
+            accessibilityLabel={isSaved ? (isArabic ? 'إزالة الإشارة المرجعية' : 'Remove bookmark') : (isArabic ? 'حفظ الخبر' : 'Save story')}
+          >
             <FontAwesome
               name={isSaved ? 'bookmark' : 'bookmark-o'}
               size={22}
               color={isSaved ? '#007AFF' : '#fff'}
             />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.headerButton} onPress={handleShare}>
+          <TouchableOpacity
+            style={styles.headerButton}
+            onPress={handleShare}
+            accessibilityRole="button"
+            accessibilityLabel={isArabic ? 'مشاركة' : 'Share'}
+          >
             <FontAwesome name="share" size={22} color="#fff" />
           </TouchableOpacity>
         </View>
@@ -183,7 +198,12 @@ export default function StoryDetailScreen() {
         </View>
 
         {/* Read Original Button */}
-        <TouchableOpacity style={styles.originalButton} onPress={handleOpenOriginal}>
+        <TouchableOpacity
+          style={styles.originalButton}
+          onPress={handleOpenOriginal}
+          accessibilityRole="button"
+          accessibilityLabel={isArabic ? 'قراءة المقال الأصلي' : 'Read original article'}
+        >
           <Text style={styles.originalButtonText}>
             {isArabic ? 'قراءة المقال الأصلي' : 'Read Original Article'}
           </Text>

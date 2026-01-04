@@ -63,6 +63,8 @@ export default function ForgotPasswordScreen() {
             <TouchableOpacity
               style={styles.backButton}
               onPress={() => router.back()}
+              accessibilityRole="button"
+              accessibilityLabel={isArabic ? 'العودة لتسجيل الدخول' : 'Return to login'}
             >
               <Text style={styles.backButtonText}>
                 {isArabic ? 'العودة لتسجيل الدخول' : 'Back to Login'}
@@ -84,6 +86,8 @@ export default function ForgotPasswordScreen() {
         <TouchableOpacity
           style={[styles.backArrow, isArabic && styles.backArrowRtl]}
           onPress={() => router.back()}
+          accessibilityRole="button"
+          accessibilityLabel={isArabic ? 'رجوع' : 'Go back'}
         >
           <FontAwesome name={isArabic ? 'arrow-right' : 'arrow-left'} size={24} color="#fff" />
         </TouchableOpacity>
@@ -114,6 +118,7 @@ export default function ForgotPasswordScreen() {
               keyboardType="email-address"
               autoCapitalize="none"
               autoComplete="email"
+              accessibilityLabel={isArabic ? 'البريد الإلكتروني' : 'Email address'}
             />
             {error && <Text style={styles.errorText}>{error}</Text>}
           </View>
@@ -122,6 +127,9 @@ export default function ForgotPasswordScreen() {
             style={styles.resetButton}
             onPress={handleReset}
             disabled={isLoading}
+            accessibilityRole="button"
+            accessibilityLabel={isArabic ? 'إرسال رابط إعادة التعيين' : 'Send reset link'}
+            accessibilityState={{ disabled: isLoading }}
           >
             {isLoading ? (
               <ActivityIndicator color={colors.textPrimary} />
@@ -137,6 +145,8 @@ export default function ForgotPasswordScreen() {
         <TouchableOpacity
           style={styles.loginLink}
           onPress={() => router.back()}
+          accessibilityRole="button"
+          accessibilityLabel={isArabic ? 'العودة لتسجيل الدخول' : 'Back to login'}
         >
           <Text style={styles.loginLinkText}>
             {isArabic ? 'العودة لتسجيل الدخول' : 'Back to Login'}

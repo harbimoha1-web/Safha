@@ -68,9 +68,14 @@ export default function SearchScreen() {
             onChangeText={handleSearch}
             autoCapitalize="none"
             returnKeyType="search"
+            accessibilityLabel={isArabic ? 'بحث في الأخبار' : 'Search news'}
           />
           {query.length > 0 && (
-            <TouchableOpacity onPress={() => handleSearch('')}>
+            <TouchableOpacity
+              onPress={() => handleSearch('')}
+              accessibilityRole="button"
+              accessibilityLabel={isArabic ? 'مسح البحث' : 'Clear search'}
+            >
               <FontAwesome name="times-circle" size={18} color="#888" />
             </TouchableOpacity>
           )}
@@ -105,6 +110,8 @@ export default function SearchScreen() {
             <TouchableOpacity
               style={styles.resultCard}
               onPress={() => handleStoryPress(item.id)}
+              accessibilityRole="button"
+              accessibilityLabel={(isArabic ? item.title_ar : item.title_en) || undefined}
             >
               {item.image_url && (
                 <Image source={{ uri: item.image_url }} style={styles.resultImage} />
@@ -132,7 +139,11 @@ export default function SearchScreen() {
                 <Text style={[styles.sectionTitle, isArabic && styles.arabicText]}>
                   {isArabic ? 'عمليات البحث الأخيرة' : 'Recent Searches'}
                 </Text>
-                <TouchableOpacity onPress={clearRecentSearches}>
+                <TouchableOpacity
+                  onPress={clearRecentSearches}
+                  accessibilityRole="button"
+                  accessibilityLabel={isArabic ? 'مسح البحث الأخير' : 'Clear recent searches'}
+                >
                   <Text style={styles.clearButton}>
                     {isArabic ? 'مسح' : 'Clear'}
                   </Text>
@@ -144,6 +155,8 @@ export default function SearchScreen() {
                     key={index}
                     style={styles.recentSearchItem}
                     onPress={() => handleSearch(search)}
+                    accessibilityRole="button"
+                    accessibilityLabel={search}
                   >
                     <FontAwesome name="history" size={14} color="#888" />
                     <Text style={styles.recentSearchText}>{search}</Text>
@@ -163,6 +176,8 @@ export default function SearchScreen() {
                 key={topic.id}
                 style={[styles.topicCard, topic.color ? { backgroundColor: topic.color } : { backgroundColor: '#333' }]}
                 onPress={() => handleTopicPress(topic)}
+                accessibilityRole="button"
+                accessibilityLabel={isArabic ? topic.name_ar : topic.name_en}
               >
                 {topic.icon && <Text style={styles.topicIcon}>{topic.icon}</Text>}
                 <Text style={styles.topicName}>

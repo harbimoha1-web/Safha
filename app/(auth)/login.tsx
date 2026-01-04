@@ -108,6 +108,7 @@ export default function LoginScreen() {
               keyboardType="email-address"
               autoCapitalize="none"
               autoComplete="email"
+              accessibilityLabel={isArabic ? 'البريد الإلكتروني' : 'Email address'}
             />
             {errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
           </View>
@@ -124,11 +125,16 @@ export default function LoginScreen() {
               }}
               secureTextEntry
               autoComplete="password"
+              accessibilityLabel={isArabic ? 'كلمة المرور' : 'Password'}
             />
             {errors.password && <Text style={styles.errorText}>{errors.password}</Text>}
           </View>
 
-          <TouchableOpacity onPress={() => router.push('/(auth)/forgot-password')}>
+          <TouchableOpacity
+            onPress={() => router.push('/(auth)/forgot-password')}
+            accessibilityRole="button"
+            accessibilityLabel={isArabic ? 'نسيت كلمة المرور' : 'Forgot password'}
+          >
             <Text style={[styles.forgotPassword, isArabic && styles.arabicText]}>
               {isArabic ? 'نسيت كلمة المرور؟' : 'Forgot Password?'}
             </Text>
@@ -138,6 +144,9 @@ export default function LoginScreen() {
             style={styles.loginButton}
             onPress={handleLogin}
             disabled={isLoading}
+            accessibilityRole="button"
+            accessibilityLabel={isArabic ? 'تسجيل الدخول' : 'Sign in'}
+            accessibilityState={{ disabled: isLoading }}
           >
             {isLoading ? (
               <ActivityIndicator color={colors.textPrimary} />
@@ -163,6 +172,8 @@ export default function LoginScreen() {
           <TouchableOpacity
             style={styles.socialButton}
             onPress={handleGoogleLogin}
+            accessibilityRole="button"
+            accessibilityLabel={isArabic ? 'تسجيل الدخول بجوجل' : 'Sign in with Google'}
           >
             <Text style={styles.socialButtonText}>
               {isArabic ? 'جوجل' : 'Google'}
@@ -173,6 +184,8 @@ export default function LoginScreen() {
             <TouchableOpacity
               style={[styles.socialButton, styles.appleButton]}
               onPress={handleAppleLogin}
+              accessibilityRole="button"
+              accessibilityLabel={isArabic ? 'تسجيل الدخول بأبل' : 'Sign in with Apple'}
             >
               <Text style={[styles.socialButtonText, styles.appleButtonText]}>
                 {isArabic ? 'أبل' : 'Apple'}
@@ -187,7 +200,10 @@ export default function LoginScreen() {
             {isArabic ? 'ليس لديك حساب؟ ' : "Don't have an account? "}
           </Text>
           <Link href="/(auth)/register" asChild>
-            <TouchableOpacity>
+            <TouchableOpacity
+              accessibilityRole="link"
+              accessibilityLabel={isArabic ? 'إنشاء حساب جديد' : 'Create a new account'}
+            >
               <Text style={styles.footerLink}>
                 {isArabic ? 'إنشاء حساب' : 'Sign Up'}
               </Text>
