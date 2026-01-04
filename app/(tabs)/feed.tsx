@@ -15,7 +15,7 @@ import { StoryCardSkeleton } from '@/components/SkeletonLoader';
 import { useAppStore, useAuthStore } from '@/stores';
 import { recordInteraction } from '@/lib/api';
 import { useStories, useSavedStories, useSaveStory, useUnsaveStory } from '@/hooks';
-import { PREFETCH_THRESHOLD } from '@/constants/config';
+import { PREFETCH_THRESHOLD, colors, spacing, borderRadius, fontSize, fontWeight } from '@/constants';
 
 export default function FeedScreen() {
   const pagerRef = useRef<PagerView>(null);
@@ -167,7 +167,7 @@ export default function FeedScreen() {
               style={styles.editFiltersButton}
               onPress={() => router.push('/(auth)/onboarding')}
             >
-              <FontAwesome name="sliders" size={14} color="#007AFF" />
+              <FontAwesome name="sliders" size={14} color={colors.primary} />
               <Text style={styles.editFiltersText}>
                 {isArabic ? 'تعديل' : 'Edit'}
               </Text>
@@ -203,7 +203,7 @@ export default function FeedScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: colors.background,
   },
   filterBar: {
     position: 'absolute',
@@ -211,39 +211,39 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 10,
-    paddingHorizontal: 12,
+    paddingHorizontal: spacing.md,
   },
   filterContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: spacing.sm,
   },
   filterChip: {
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
+    backgroundColor: colors.surfaceOverlay,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm - 2,
+    borderRadius: borderRadius.lg,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
+    borderColor: colors.borderLight,
   },
   filterChipText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '500',
+    color: colors.textPrimary,
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.medium,
   },
   editFiltersButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(0,122,255,0.2)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
+    gap: spacing.xs,
+    backgroundColor: colors.primaryLight,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm - 2,
+    borderRadius: borderRadius.lg,
   },
   editFiltersText: {
-    color: '#007AFF',
-    fontSize: 12,
-    fontWeight: '500',
+    color: colors.primary,
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.medium,
   },
   pager: {
     flex: 1,
@@ -253,23 +253,23 @@ const styles = StyleSheet.create({
   },
   centered: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: colors.background,
     justifyContent: 'center',
     alignItems: 'center',
   },
   errorText: {
-    color: '#ff4444',
-    fontSize: 16,
+    color: colors.error,
+    fontSize: fontSize.md,
     textAlign: 'center',
-    marginBottom: 12,
+    marginBottom: spacing.md,
   },
   retryText: {
-    color: '#007AFF',
-    fontSize: 14,
+    color: colors.primary,
+    fontSize: fontSize.sm,
   },
   emptyText: {
-    color: '#888',
-    fontSize: 16,
+    color: colors.textSecondary,
+    fontSize: fontSize.md,
     textAlign: 'center',
   },
 });

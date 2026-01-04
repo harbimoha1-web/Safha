@@ -13,6 +13,7 @@ import {
 import { router } from 'expo-router';
 import { FontAwesome } from '@expo/vector-icons';
 import { useAuthStore, useAppStore } from '@/stores';
+import { colors, spacing, borderRadius, fontSize, fontWeight } from '@/constants';
 
 export default function ForgotPasswordScreen() {
   const [email, setEmail] = useState('');
@@ -50,7 +51,7 @@ export default function ForgotPasswordScreen() {
       <View style={styles.container}>
         <View style={styles.content}>
           <View style={styles.successContainer}>
-            <FontAwesome name="check-circle" size={80} color="#4CAF50" />
+            <FontAwesome name="check-circle" size={80} color={colors.success} />
             <Text style={[styles.successTitle, isArabic && styles.arabicText]}>
               {isArabic ? 'تحقق من بريدك' : 'Check Your Email'}
             </Text>
@@ -104,7 +105,7 @@ export default function ForgotPasswordScreen() {
             <TextInput
               style={[styles.input, isArabic && styles.arabicText, error && styles.inputError]}
               placeholder={isArabic ? 'البريد الإلكتروني' : 'Email'}
-              placeholderTextColor="#999"
+              placeholderTextColor={colors.placeholder}
               value={email}
               onChangeText={(text) => {
                 setEmail(text);
@@ -123,7 +124,7 @@ export default function ForgotPasswordScreen() {
             disabled={isLoading}
           >
             {isLoading ? (
-              <ActivityIndicator color="#fff" />
+              <ActivityIndicator color={colors.textPrimary} />
             ) : (
               <Text style={styles.resetButtonText}>
                 {isArabic ? 'إرسال رابط إعادة التعيين' : 'Send Reset Link'}
@@ -149,109 +150,109 @@ export default function ForgotPasswordScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: colors.background,
   },
   content: {
     flex: 1,
     justifyContent: 'center',
-    paddingHorizontal: 24,
+    paddingHorizontal: spacing.xxl,
   },
   backArrow: {
     position: 'absolute',
     top: 60,
-    left: 24,
+    left: spacing.xxl,
     zIndex: 1,
   },
   backArrowRtl: {
     left: undefined,
-    right: 24,
+    right: spacing.xxl,
   },
   arabicText: {
     textAlign: 'right',
   },
   header: {
-    marginBottom: 32,
+    marginBottom: spacing.xxxl,
   },
   title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 12,
+    fontSize: fontSize.display,
+    fontWeight: fontWeight.bold,
+    color: colors.textPrimary,
+    marginBottom: spacing.md,
   },
   subtitle: {
-    fontSize: 16,
-    color: '#888',
+    fontSize: fontSize.md,
+    color: colors.textSecondary,
     lineHeight: 24,
   },
   form: {
-    gap: 16,
+    gap: spacing.lg,
   },
   input: {
-    backgroundColor: '#1a1a1a',
-    borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
-    color: '#fff',
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
+    padding: spacing.lg,
+    fontSize: fontSize.md,
+    color: colors.textPrimary,
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: colors.border,
   },
   inputError: {
-    borderColor: '#FF6B6B',
+    borderColor: colors.error,
   },
   errorText: {
-    color: '#FF6B6B',
-    fontSize: 12,
-    marginTop: 4,
-    marginLeft: 4,
+    color: colors.error,
+    fontSize: fontSize.xs,
+    marginTop: spacing.xs,
+    marginLeft: spacing.xs,
   },
   resetButton: {
-    backgroundColor: '#007AFF',
-    borderRadius: 12,
-    padding: 16,
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.md,
+    padding: spacing.lg,
     alignItems: 'center',
-    marginTop: 8,
+    marginTop: spacing.sm,
   },
   resetButtonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '600',
+    color: colors.textPrimary,
+    fontSize: fontSize.lg,
+    fontWeight: fontWeight.semibold,
   },
   loginLink: {
     alignItems: 'center',
-    marginTop: 24,
+    marginTop: spacing.xxl,
   },
   loginLinkText: {
-    color: '#007AFF',
-    fontSize: 16,
-    fontWeight: '500',
+    color: colors.primary,
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.medium,
   },
   successContainer: {
     alignItems: 'center',
-    paddingHorizontal: 24,
+    paddingHorizontal: spacing.xxl,
   },
   successTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginTop: 24,
-    marginBottom: 16,
+    fontSize: fontSize.xxxl,
+    fontWeight: fontWeight.bold,
+    color: colors.textPrimary,
+    marginTop: spacing.xxl,
+    marginBottom: spacing.lg,
   },
   successMessage: {
-    fontSize: 16,
-    color: '#888',
+    fontSize: fontSize.md,
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 24,
-    marginBottom: 32,
+    marginBottom: spacing.xxxl,
   },
   backButton: {
-    backgroundColor: '#007AFF',
-    borderRadius: 12,
-    paddingHorizontal: 32,
-    paddingVertical: 16,
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.xxxl,
+    paddingVertical: spacing.lg,
   },
   backButtonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '600',
+    color: colors.textPrimary,
+    fontSize: fontSize.lg,
+    fontWeight: fontWeight.semibold,
   },
 });

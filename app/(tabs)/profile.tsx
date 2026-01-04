@@ -15,6 +15,7 @@ import { FontAwesome } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useAppStore, useAuthStore } from '@/stores';
 import { updateProfile } from '@/lib/api';
+import { colors, spacing, borderRadius, fontSize, fontWeight } from '@/constants';
 
 export default function ProfileScreen() {
   const { settings, setLanguage, setTheme } = useAppStore();
@@ -99,13 +100,13 @@ export default function ProfileScreen() {
       disabled={!onPress}
     >
       <View style={styles.settingsItemLeft}>
-        <FontAwesome name={icon as any} size={20} color="#007AFF" />
+        <FontAwesome name={icon as any} size={20} color={colors.primary} />
         <Text style={styles.settingsItemTitle}>{title}</Text>
       </View>
       <View style={styles.settingsItemRight}>
         {value && <Text style={styles.settingsItemValue}>{value}</Text>}
         {showArrow && onPress && (
-          <FontAwesome name="chevron-right" size={14} color="#666" />
+          <FontAwesome name="chevron-right" size={14} color={colors.textMuted} />
         )}
       </View>
     </TouchableOpacity>
@@ -124,7 +125,7 @@ export default function ProfileScreen() {
       {isAuthenticated ? (
         <View style={styles.profileSection}>
           <View style={styles.avatar}>
-            <FontAwesome name="user" size={32} color="#fff" />
+            <FontAwesome name="user" size={32} color={colors.textPrimary} />
           </View>
           <View style={styles.profileInfo}>
             <Text style={styles.profileName}>
@@ -135,7 +136,7 @@ export default function ProfileScreen() {
             </Text>
           </View>
           <TouchableOpacity onPress={handleEditProfile}>
-            <FontAwesome name="pencil" size={18} color="#007AFF" />
+            <FontAwesome name="pencil" size={18} color={colors.primary} />
           </TouchableOpacity>
         </View>
       ) : (
@@ -144,7 +145,7 @@ export default function ProfileScreen() {
           onPress={() => router.push('/(auth)/login')}
         >
           <View style={styles.signInContent}>
-            <FontAwesome name="sign-in" size={24} color="#007AFF" />
+            <FontAwesome name="sign-in" size={24} color={colors.primary} />
             <View style={styles.signInText}>
               <Text style={styles.signInTitle}>
                 {isArabic ? 'تسجيل الدخول' : 'Sign In'}
@@ -156,7 +157,7 @@ export default function ProfileScreen() {
               </Text>
             </View>
           </View>
-          <FontAwesome name="chevron-right" size={14} color="#666" />
+          <FontAwesome name="chevron-right" size={14} color={colors.textMuted} />
         </TouchableOpacity>
       )}
 
@@ -276,7 +277,7 @@ export default function ProfileScreen() {
       {/* Sign Out */}
       {isAuthenticated && (
         <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
-          <FontAwesome name="sign-out" size={20} color="#FF3B30" />
+          <FontAwesome name="sign-out" size={20} color={colors.error} />
           <Text style={styles.signOutText}>
             {isArabic ? 'تسجيل الخروج' : 'Sign Out'}
           </Text>
@@ -299,7 +300,7 @@ export default function ProfileScreen() {
                 {isArabic ? 'تعديل الملف الشخصي' : 'Edit Profile'}
               </Text>
               <TouchableOpacity onPress={() => setEditModalVisible(false)}>
-                <FontAwesome name="times" size={24} color="#888" />
+                <FontAwesome name="times" size={24} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
 
@@ -312,7 +313,7 @@ export default function ProfileScreen() {
                 value={editName}
                 onChangeText={setEditName}
                 placeholder={isArabic ? 'أدخل اسمك' : 'Enter your name'}
-                placeholderTextColor="#666"
+                placeholderTextColor={colors.textMuted}
               />
 
               <Text style={styles.inputLabel}>
@@ -323,7 +324,7 @@ export default function ProfileScreen() {
                 value={editUsername}
                 onChangeText={setEditUsername}
                 placeholder={isArabic ? 'أدخل اسم المستخدم' : 'Enter username'}
-                placeholderTextColor="#666"
+                placeholderTextColor={colors.textMuted}
                 autoCapitalize="none"
               />
             </View>
@@ -334,7 +335,7 @@ export default function ProfileScreen() {
               disabled={isSaving}
             >
               {isSaving ? (
-                <ActivityIndicator color="#fff" />
+                <ActivityIndicator color={colors.textPrimary} />
               ) : (
                 <Text style={styles.saveButtonText}>
                   {isArabic ? 'حفظ' : 'Save'}
@@ -351,17 +352,17 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: colors.background,
   },
   header: {
-    paddingHorizontal: 20,
+    paddingHorizontal: spacing.xl,
     paddingTop: 60,
-    paddingBottom: 20,
+    paddingBottom: spacing.xl,
   },
   headerTitle: {
-    color: '#fff',
-    fontSize: 28,
-    fontWeight: 'bold',
+    color: colors.textPrimary,
+    fontSize: fontSize.xxxl,
+    fontWeight: fontWeight.bold,
   },
   arabicText: {
     textAlign: 'right',
@@ -369,17 +370,17 @@ const styles = StyleSheet.create({
   profileSection: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1a1a1a',
-    marginHorizontal: 16,
-    borderRadius: 12,
-    padding: 16,
-    gap: 12,
+    backgroundColor: colors.surface,
+    marginHorizontal: spacing.lg,
+    borderRadius: borderRadius.md,
+    padding: spacing.lg,
+    gap: spacing.md,
   },
   avatar: {
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#333',
+    backgroundColor: colors.surfaceLight,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -387,98 +388,98 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   profileName: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '600',
+    color: colors.textPrimary,
+    fontSize: fontSize.lg,
+    fontWeight: fontWeight.semibold,
   },
   profileEmail: {
-    color: '#888',
-    fontSize: 14,
+    color: colors.textSecondary,
+    fontSize: fontSize.sm,
     marginTop: 2,
   },
   signInSection: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#1a1a1a',
-    marginHorizontal: 16,
-    borderRadius: 12,
-    padding: 16,
+    backgroundColor: colors.surface,
+    marginHorizontal: spacing.lg,
+    borderRadius: borderRadius.md,
+    padding: spacing.lg,
   },
   signInContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: spacing.md,
   },
   signInText: {},
   signInTitle: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
+    color: colors.textPrimary,
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.semibold,
   },
   signInSubtitle: {
-    color: '#888',
-    fontSize: 12,
+    color: colors.textSecondary,
+    fontSize: fontSize.xs,
     marginTop: 2,
   },
   section: {
-    marginTop: 32,
+    marginTop: spacing.xxxl,
   },
   sectionTitle: {
-    color: '#888',
+    color: colors.textSecondary,
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: fontWeight.semibold,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
-    marginHorizontal: 20,
-    marginBottom: 8,
+    marginHorizontal: spacing.xl,
+    marginBottom: spacing.sm,
   },
   sectionContent: {
-    backgroundColor: '#1a1a1a',
-    marginHorizontal: 16,
-    borderRadius: 12,
+    backgroundColor: colors.surface,
+    marginHorizontal: spacing.lg,
+    borderRadius: borderRadius.md,
   },
   settingsItem: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 16,
+    padding: spacing.lg,
     borderBottomWidth: 1,
     borderBottomColor: '#222',
   },
   settingsItemLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: spacing.md,
   },
   settingsItemTitle: {
-    color: '#fff',
-    fontSize: 16,
+    color: colors.textPrimary,
+    fontSize: fontSize.md,
   },
   settingsItemRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: spacing.sm,
   },
   settingsItemValue: {
-    color: '#888',
-    fontSize: 14,
+    color: colors.textSecondary,
+    fontSize: fontSize.sm,
   },
   signOutButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    marginHorizontal: 16,
-    marginTop: 32,
-    backgroundColor: '#1a1a1a',
-    borderRadius: 12,
-    padding: 16,
+    gap: spacing.sm,
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.xxxl,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
+    padding: spacing.lg,
   },
   signOutText: {
-    color: '#FF3B30',
-    fontSize: 16,
-    fontWeight: '600',
+    color: colors.error,
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.semibold,
   },
   footer: {
     height: 100,
@@ -489,50 +490,50 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: '#1a1a1a',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 24,
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: borderRadius.xl,
+    borderTopRightRadius: borderRadius.xl,
+    padding: spacing.xxl,
     paddingBottom: 40,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: spacing.xxl,
   },
   modalTitle: {
-    color: '#fff',
-    fontSize: 20,
-    fontWeight: '600',
+    color: colors.textPrimary,
+    fontSize: fontSize.xl,
+    fontWeight: fontWeight.semibold,
   },
   modalForm: {
-    gap: 16,
+    gap: spacing.lg,
   },
   inputLabel: {
-    color: '#888',
-    fontSize: 14,
-    marginBottom: 4,
+    color: colors.textSecondary,
+    fontSize: fontSize.sm,
+    marginBottom: spacing.xs,
   },
   input: {
     backgroundColor: '#222',
     borderRadius: 10,
-    padding: 14,
-    fontSize: 16,
-    color: '#fff',
+    padding: spacing.lg - 2,
+    fontSize: fontSize.md,
+    color: colors.textPrimary,
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: colors.border,
   },
   saveButton: {
-    backgroundColor: '#007AFF',
+    backgroundColor: colors.primary,
     borderRadius: 10,
-    padding: 16,
+    padding: spacing.lg,
     alignItems: 'center',
-    marginTop: 24,
+    marginTop: spacing.xxl,
   },
   saveButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
+    color: colors.textPrimary,
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.semibold,
   },
 });

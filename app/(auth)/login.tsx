@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { Link, router } from 'expo-router';
 import { useAuthStore, useAppStore } from '@/stores';
+import { colors, spacing, borderRadius, fontSize, fontWeight } from '@/constants';
 
 // Enable RTL for Arabic
 I18nManager.allowRTL(true);
@@ -98,7 +99,7 @@ export default function LoginScreen() {
             <TextInput
               style={[styles.input, isArabic && styles.arabicText, errors.email && styles.inputError]}
               placeholder={isArabic ? 'البريد الإلكتروني' : 'Email'}
-              placeholderTextColor="#999"
+              placeholderTextColor={colors.placeholder}
               value={email}
               onChangeText={(text) => {
                 setEmail(text);
@@ -115,7 +116,7 @@ export default function LoginScreen() {
             <TextInput
               style={[styles.input, isArabic && styles.arabicText, errors.password && styles.inputError]}
               placeholder={isArabic ? 'كلمة المرور' : 'Password'}
-              placeholderTextColor="#999"
+              placeholderTextColor={colors.placeholder}
               value={password}
               onChangeText={(text) => {
                 setPassword(text);
@@ -139,7 +140,7 @@ export default function LoginScreen() {
             disabled={isLoading}
           >
             {isLoading ? (
-              <ActivityIndicator color="#fff" />
+              <ActivityIndicator color={colors.textPrimary} />
             ) : (
               <Text style={styles.loginButtonText}>
                 {isArabic ? 'تسجيل الدخول' : 'Sign In'}
@@ -201,125 +202,125 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: colors.background,
   },
   content: {
     flex: 1,
     justifyContent: 'center',
-    paddingHorizontal: 24,
+    paddingHorizontal: spacing.xxl,
   },
   header: {
     alignItems: 'center',
-    marginBottom: 48,
+    marginBottom: spacing.xxxxl,
   },
   logo: {
-    fontSize: 64,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 8,
+    fontSize: fontSize.hero,
+    fontWeight: fontWeight.bold,
+    color: colors.textPrimary,
+    marginBottom: spacing.sm,
   },
   subtitle: {
-    fontSize: 24,
-    color: '#fff',
+    fontSize: fontSize.xxl,
+    color: colors.textPrimary,
     opacity: 0.9,
   },
   tagline: {
-    fontSize: 14,
-    color: '#888',
-    marginTop: 8,
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+    marginTop: spacing.sm,
   },
   form: {
-    gap: 16,
+    gap: spacing.lg,
   },
   forgotPassword: {
-    color: '#007AFF',
-    fontSize: 14,
+    color: colors.primary,
+    fontSize: fontSize.sm,
     textAlign: 'right',
   },
   arabicText: {
     textAlign: 'right',
   },
   input: {
-    backgroundColor: '#1a1a1a',
-    borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
-    color: '#fff',
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
+    padding: spacing.lg,
+    fontSize: fontSize.md,
+    color: colors.textPrimary,
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: colors.border,
   },
   inputError: {
-    borderColor: '#FF6B6B',
+    borderColor: colors.error,
   },
   errorText: {
-    color: '#FF6B6B',
-    fontSize: 12,
-    marginTop: 4,
-    marginLeft: 4,
+    color: colors.error,
+    fontSize: fontSize.xs,
+    marginTop: spacing.xs,
+    marginLeft: spacing.xs,
   },
   loginButton: {
-    backgroundColor: '#007AFF',
-    borderRadius: 12,
-    padding: 16,
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.md,
+    padding: spacing.lg,
     alignItems: 'center',
-    marginTop: 8,
+    marginTop: spacing.sm,
   },
   loginButtonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '600',
+    color: colors.textPrimary,
+    fontSize: fontSize.lg,
+    fontWeight: fontWeight.semibold,
   },
   divider: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: 32,
+    marginVertical: spacing.xxxl,
   },
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: '#333',
+    backgroundColor: colors.border,
   },
   dividerText: {
-    color: '#888',
-    paddingHorizontal: 16,
-    fontSize: 14,
+    color: colors.textSecondary,
+    paddingHorizontal: spacing.lg,
+    fontSize: fontSize.sm,
   },
   socialButtons: {
     flexDirection: 'row',
-    gap: 12,
+    gap: spacing.md,
   },
   socialButton: {
     flex: 1,
-    backgroundColor: '#1a1a1a',
-    borderRadius: 12,
-    padding: 16,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
+    padding: spacing.lg,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: colors.border,
   },
   socialButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '500',
+    color: colors.textPrimary,
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.medium,
   },
   appleButton: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.textPrimary,
   },
   appleButtonText: {
-    color: '#000',
+    color: colors.textInverse,
   },
   footer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginTop: 32,
+    marginTop: spacing.xxxl,
   },
   footerText: {
-    color: '#888',
-    fontSize: 14,
+    color: colors.textSecondary,
+    fontSize: fontSize.sm,
   },
   footerLink: {
-    color: '#007AFF',
-    fontSize: 14,
-    fontWeight: '600',
+    color: colors.primary,
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.semibold,
   },
 });

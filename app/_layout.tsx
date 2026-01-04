@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
+import { colors, spacing, borderRadius, fontSize, fontWeight } from '@/constants';
 
 // Global Error Boundary for runtime errors
 class AppErrorBoundary extends React.Component<
@@ -24,7 +25,7 @@ class AppErrorBoundary extends React.Component<
     if (this.state.hasError) {
       return (
         <View style={boundaryStyles.container}>
-          <FontAwesome name="bug" size={48} color="#FF6B6B" />
+          <FontAwesome name="bug" size={48} color={colors.error} />
           <Text style={boundaryStyles.title}>Something went wrong</Text>
           <Text style={boundaryStyles.titleAr}>حدث خطأ ما</Text>
           <Text style={boundaryStyles.message}>
@@ -46,40 +47,40 @@ class AppErrorBoundary extends React.Component<
 const boundaryStyles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: colors.background,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 24,
+    padding: spacing.xxl,
   },
   title: {
-    color: '#fff',
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginTop: 16,
+    color: colors.textPrimary,
+    fontSize: fontSize.xxl,
+    fontWeight: fontWeight.bold,
+    marginTop: spacing.lg,
   },
   titleAr: {
-    color: '#888',
-    fontSize: 18,
-    marginTop: 4,
-    marginBottom: 8,
+    color: colors.textSecondary,
+    fontSize: fontSize.lg,
+    marginTop: spacing.xs,
+    marginBottom: spacing.sm,
   },
   message: {
-    color: '#888',
-    fontSize: 14,
+    color: colors.textSecondary,
+    fontSize: fontSize.sm,
     textAlign: 'center',
-    marginBottom: 24,
-    paddingHorizontal: 16,
+    marginBottom: spacing.xxl,
+    paddingHorizontal: spacing.lg,
   },
   retryButton: {
-    backgroundColor: '#007AFF',
-    paddingHorizontal: 32,
-    paddingVertical: 14,
-    borderRadius: 12,
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.xxxl,
+    paddingVertical: spacing.lg - 2,
+    borderRadius: borderRadius.md,
   },
   retryText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
+    color: colors.textPrimary,
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.semibold,
   },
 });
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
@@ -221,7 +222,7 @@ function RootLayoutNav() {
     return (
       <View style={errorStyles.container}>
         <StatusBar style="light" />
-        <FontAwesome name="exclamation-triangle" size={48} color="#FF6B6B" />
+        <FontAwesome name="exclamation-triangle" size={48} color={colors.error} />
         <Text style={errorStyles.title}>Connection Error</Text>
         <Text style={errorStyles.message}>{initError}</Text>
         <TouchableOpacity
@@ -263,33 +264,33 @@ function RootLayoutNav() {
 const errorStyles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: colors.background,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 24,
+    padding: spacing.xxl,
   },
   title: {
-    color: '#fff',
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginTop: 16,
-    marginBottom: 8,
+    color: colors.textPrimary,
+    fontSize: fontSize.xxl,
+    fontWeight: fontWeight.bold,
+    marginTop: spacing.lg,
+    marginBottom: spacing.sm,
   },
   message: {
-    color: '#888',
-    fontSize: 16,
+    color: colors.textSecondary,
+    fontSize: fontSize.md,
     textAlign: 'center',
-    marginBottom: 24,
+    marginBottom: spacing.xxl,
   },
   retryButton: {
-    backgroundColor: '#007AFF',
-    paddingHorizontal: 32,
-    paddingVertical: 14,
-    borderRadius: 12,
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.xxxl,
+    paddingVertical: spacing.lg - 2,
+    borderRadius: borderRadius.md,
   },
   retryText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
+    color: colors.textPrimary,
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.semibold,
   },
 });

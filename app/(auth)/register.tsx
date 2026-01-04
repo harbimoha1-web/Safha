@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { Link, router } from 'expo-router';
 import { useAuthStore, useAppStore } from '@/stores';
+import { colors, spacing, borderRadius, fontSize, fontWeight } from '@/constants';
 
 export default function RegisterScreen() {
   const [email, setEmail] = useState('');
@@ -44,16 +45,16 @@ export default function RegisterScreen() {
   };
 
   const getPasswordStrength = (value: string): { level: string; color: string; widthPercent: number } => {
-    if (!value) return { level: '', color: '#333', widthPercent: 0 };
-    if (value.length < 6) return { level: isArabic ? 'ضعيفة' : 'Weak', color: '#FF6B6B', widthPercent: 25 };
-    if (value.length < 8) return { level: isArabic ? 'متوسطة' : 'Fair', color: '#FFB800', widthPercent: 50 };
+    if (!value) return { level: '', color: colors.border, widthPercent: 0 };
+    if (value.length < 6) return { level: isArabic ? 'ضعيفة' : 'Weak', color: colors.error, widthPercent: 25 };
+    if (value.length < 8) return { level: isArabic ? 'متوسطة' : 'Fair', color: colors.warning, widthPercent: 50 };
     if (/[A-Z]/.test(value) && /[0-9]/.test(value) && /[^A-Za-z0-9]/.test(value)) {
-      return { level: isArabic ? 'قوية جداً' : 'Very Strong', color: '#4CAF50', widthPercent: 100 };
+      return { level: isArabic ? 'قوية جداً' : 'Very Strong', color: colors.success, widthPercent: 100 };
     }
     if (/[A-Z]/.test(value) && /[0-9]/.test(value)) {
-      return { level: isArabic ? 'قوية' : 'Strong', color: '#8BC34A', widthPercent: 75 };
+      return { level: isArabic ? 'قوية' : 'Strong', color: colors.successLight, widthPercent: 75 };
     }
-    return { level: isArabic ? 'جيدة' : 'Good', color: '#8BC34A', widthPercent: 60 };
+    return { level: isArabic ? 'جيدة' : 'Good', color: colors.successLight, widthPercent: 60 };
   };
 
   const passwordStrength = getPasswordStrength(password);
@@ -97,7 +98,7 @@ export default function RegisterScreen() {
             <TextInput
               style={[styles.input, isArabic && styles.arabicText, errors.email && styles.inputError]}
               placeholder={isArabic ? 'البريد الإلكتروني' : 'Email'}
-              placeholderTextColor="#999"
+              placeholderTextColor={colors.placeholder}
               value={email}
               onChangeText={(text) => {
                 setEmail(text);
@@ -114,7 +115,7 @@ export default function RegisterScreen() {
             <TextInput
               style={[styles.input, isArabic && styles.arabicText, errors.password && styles.inputError]}
               placeholder={isArabic ? 'كلمة المرور' : 'Password'}
-              placeholderTextColor="#999"
+              placeholderTextColor={colors.placeholder}
               value={password}
               onChangeText={(text) => {
                 setPassword(text);
@@ -138,7 +139,7 @@ export default function RegisterScreen() {
             <TextInput
               style={[styles.input, isArabic && styles.arabicText, errors.confirmPassword && styles.inputError]}
               placeholder={isArabic ? 'تأكيد كلمة المرور' : 'Confirm Password'}
-              placeholderTextColor="#999"
+              placeholderTextColor={colors.placeholder}
               value={confirmPassword}
               onChangeText={(text) => {
                 setConfirmPassword(text);
@@ -156,7 +157,7 @@ export default function RegisterScreen() {
             disabled={isLoading}
           >
             {isLoading ? (
-              <ActivityIndicator color="#fff" />
+              <ActivityIndicator color={colors.textPrimary} />
             ) : (
               <Text style={styles.registerButtonText}>
                 {isArabic ? 'إنشاء حساب' : 'Create Account'}
@@ -203,105 +204,105 @@ export default function RegisterScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: colors.background,
   },
   content: {
     flex: 1,
     justifyContent: 'center',
-    paddingHorizontal: 24,
+    paddingHorizontal: spacing.xxl,
   },
   header: {
-    marginBottom: 48,
+    marginBottom: spacing.xxxxl,
   },
   title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 8,
+    fontSize: fontSize.display,
+    fontWeight: fontWeight.bold,
+    color: colors.textPrimary,
+    marginBottom: spacing.sm,
   },
   subtitle: {
-    fontSize: 16,
-    color: '#888',
+    fontSize: fontSize.md,
+    color: colors.textSecondary,
   },
   form: {
-    gap: 16,
+    gap: spacing.lg,
   },
   arabicText: {
     textAlign: 'right',
   },
   input: {
-    backgroundColor: '#1a1a1a',
-    borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
-    color: '#fff',
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
+    padding: spacing.lg,
+    fontSize: fontSize.md,
+    color: colors.textPrimary,
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: colors.border,
   },
   inputError: {
-    borderColor: '#FF6B6B',
+    borderColor: colors.error,
   },
   errorText: {
-    color: '#FF6B6B',
-    fontSize: 12,
-    marginTop: 4,
-    marginLeft: 4,
+    color: colors.error,
+    fontSize: fontSize.xs,
+    marginTop: spacing.xs,
+    marginLeft: spacing.xs,
   },
   strengthContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 8,
-    gap: 8,
+    marginTop: spacing.sm,
+    gap: spacing.sm,
   },
   strengthBar: {
     flex: 1,
     height: 4,
-    backgroundColor: '#333',
-    borderRadius: 2,
+    backgroundColor: colors.border,
+    borderRadius: borderRadius.xs,
     overflow: 'hidden',
   },
   strengthFill: {
     height: '100%',
-    borderRadius: 2,
+    borderRadius: borderRadius.xs,
   },
   strengthText: {
-    fontSize: 12,
-    fontWeight: '500',
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.medium,
   },
   registerButton: {
-    backgroundColor: '#007AFF',
-    borderRadius: 12,
-    padding: 16,
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.md,
+    padding: spacing.lg,
     alignItems: 'center',
-    marginTop: 8,
+    marginTop: spacing.sm,
   },
   registerButtonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '600',
+    color: colors.textPrimary,
+    fontSize: fontSize.lg,
+    fontWeight: fontWeight.semibold,
   },
   terms: {
-    color: '#888',
-    fontSize: 12,
+    color: colors.textSecondary,
+    fontSize: fontSize.xs,
     textAlign: 'center',
-    marginTop: 24,
+    marginTop: spacing.xxl,
     lineHeight: 18,
   },
   link: {
-    color: '#007AFF',
+    color: colors.primary,
   },
   footer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginTop: 32,
+    marginTop: spacing.xxxl,
   },
   footerText: {
-    color: '#888',
-    fontSize: 14,
+    color: colors.textSecondary,
+    fontSize: fontSize.sm,
   },
   footerLink: {
-    color: '#007AFF',
-    fontSize: 14,
-    fontWeight: '600',
+    color: colors.primary,
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.semibold,
   },
 });
