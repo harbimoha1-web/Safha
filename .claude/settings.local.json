@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(test:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git remote add:*)",
+      "Bash(git push:*)",
+      "Bash(wc:*)",
+      "Bash(ls:*)",
+      "Skill(manager)",
+      "Bash(npx tsc:*)"
+    ]
+  }
+}

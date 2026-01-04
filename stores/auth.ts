@@ -19,6 +19,7 @@ interface AuthState {
   signInWithApple: () => Promise<void>;
   signOut: () => Promise<void>;
   fetchProfile: () => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -43,11 +44,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   signInWithEmail: async (email, password) => {
     set({ isLoading: true });
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    if (error) {
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      if (error) throw error;
+      // Success - isLoading will be reset by onAuthStateChange listener
+    } catch (error) {
       set({ isLoading: false });
       throw error;
     }
@@ -55,11 +59,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   signUpWithEmail: async (email, password) => {
     set({ isLoading: true });
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-    });
-    if (error) {
+    try {
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+      });
+      if (error) throw error;
+      // Success - isLoading will be reset by onAuthStateChange listener
+    } catch (error) {
       set({ isLoading: false });
       throw error;
     }
@@ -67,10 +74,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   signInWithGoogle: async () => {
     set({ isLoading: true });
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-    });
-    if (error) {
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+      });
+      if (error) throw error;
+      // Success - isLoading will be reset by onAuthStateChange listener
+    } catch (error) {
       set({ isLoading: false });
       throw error;
     }
@@ -78,10 +88,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   signInWithApple: async () => {
     set({ isLoading: true });
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'apple',
-    });
-    if (error) {
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'apple',
+      });
+      if (error) throw error;
+      // Success - isLoading will be reset by onAuthStateChange listener
+    } catch (error) {
       set({ isLoading: false });
       throw error;
     }
@@ -89,32 +102,54 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   signOut: async () => {
     set({ isLoading: true });
-    const { error } = await supabase.auth.signOut();
-    if (error) {
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      set({
+        session: null,
+        user: null,
+        profile: null,
+        isAuthenticated: false,
+        isLoading: false,
+      });
+    } catch (error) {
       set({ isLoading: false });
       throw error;
     }
-    set({
-      session: null,
-      user: null,
-      profile: null,
-      isAuthenticated: false,
-      isLoading: false,
-    });
   },
 
   fetchProfile: async () => {
     const { user } = get();
     if (!user) return;
 
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', user.id)
-      .single();
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
 
-    if (!error && data) {
-      set({ profile: data });
+      if (error) {
+        console.error('Profile fetch error:', error.message);
+        return;
+      }
+
+      if (data) {
+        set({ profile: data });
+      }
+    } catch (error) {
+      console.error('Profile fetch failed:', error);
+    }
+  },
+
+  resetPassword: async (email) => {
+    set({ isLoading: true });
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: 'tellerapp://reset-password',
+    });
+    set({ isLoading: false });
+    if (error) {
+      throw error;
     }
   },
 }));

@@ -7,16 +7,56 @@ import {
   TouchableOpacity,
   Switch,
   Alert,
+  Modal,
+  TextInput,
+  ActivityIndicator,
 } from 'react-native';
 import { FontAwesome } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useAppStore, useAuthStore } from '@/stores';
+import { updateProfile } from '@/lib/api';
 
 export default function ProfileScreen() {
   const { settings, setLanguage, setTheme } = useAppStore();
-  const { isAuthenticated, profile, signOut } = useAuthStore();
+  const { isAuthenticated, profile, user, signOut, setProfile } = useAuthStore();
+
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [editName, setEditName] = useState(profile?.full_name || '');
+  const [editUsername, setEditUsername] = useState(profile?.username || '');
+  const [isSaving, setIsSaving] = useState(false);
 
   const isArabic = settings.language === 'ar';
+
+  const handleEditProfile = () => {
+    setEditName(profile?.full_name || '');
+    setEditUsername(profile?.username || '');
+    setEditModalVisible(true);
+  };
+
+  const handleSaveProfile = async () => {
+    if (!user) return;
+
+    setIsSaving(true);
+    try {
+      const updatedProfile = await updateProfile(user.id, {
+        full_name: editName.trim() || null,
+        username: editUsername.trim() || null,
+      });
+      setProfile(updatedProfile);
+      setEditModalVisible(false);
+      Alert.alert(
+        isArabic ? 'تم الحفظ' : 'Saved',
+        isArabic ? 'تم تحديث ملفك الشخصي' : 'Your profile has been updated'
+      );
+    } catch (error: any) {
+      Alert.alert(
+        isArabic ? 'خطأ' : 'Error',
+        error.message || (isArabic ? 'فشل في تحديث الملف الشخصي' : 'Failed to update profile')
+      );
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const handleSignOut = async () => {
     Alert.alert(
@@ -91,11 +131,10 @@ export default function ProfileScreen() {
               {profile?.full_name || profile?.username || 'User'}
             </Text>
             <Text style={styles.profileEmail}>
-              {/* Email would come from auth.user */}
-              user@example.com
+              {user?.email || 'No email'}
             </Text>
           </View>
-          <TouchableOpacity>
+          <TouchableOpacity onPress={handleEditProfile}>
             <FontAwesome name="pencil" size={18} color="#007AFF" />
           </TouchableOpacity>
         </View>
@@ -171,7 +210,12 @@ export default function ProfileScreen() {
           <SettingsItem
             icon="bell-o"
             title={isArabic ? 'إعدادات الإشعارات' : 'Notification Settings'}
-            onPress={() => {}}
+            onPress={() => {
+              Alert.alert(
+                isArabic ? 'قريبًا' : 'Coming Soon',
+                isArabic ? 'إعدادات الإشعارات ستتوفر قريبًا' : 'Notification settings will be available soon'
+              );
+            }}
           />
         </View>
       </View>
@@ -205,12 +249,26 @@ export default function ProfileScreen() {
           <SettingsItem
             icon="file-text-o"
             title={isArabic ? 'سياسة الخصوصية' : 'Privacy Policy'}
-            onPress={() => {}}
+            onPress={() => {
+              Alert.alert(
+                isArabic ? 'سياسة الخصوصية' : 'Privacy Policy',
+                isArabic
+                  ? 'نحن نحترم خصوصيتك ونحمي بياناتك الشخصية. سيتم إضافة سياسة الخصوصية الكاملة قريبًا.'
+                  : 'We respect your privacy and protect your personal data. Full privacy policy will be available soon.'
+              );
+            }}
           />
           <SettingsItem
             icon="legal"
             title={isArabic ? 'شروط الاستخدام' : 'Terms of Service'}
-            onPress={() => {}}
+            onPress={() => {
+              Alert.alert(
+                isArabic ? 'شروط الاستخدام' : 'Terms of Service',
+                isArabic
+                  ? 'باستخدام هذا التطبيق، أنت توافق على شروط الاستخدام الخاصة بنا. ستتوفر الشروط الكاملة قريبًا.'
+                  : 'By using this app, you agree to our terms of service. Full terms will be available soon.'
+              );
+            }}
           />
         </View>
       </View>
@@ -226,6 +284,66 @@ export default function ProfileScreen() {
       )}
 
       <View style={styles.footer} />
+
+      {/* Edit Profile Modal */}
+      <Modal
+        visible={editModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setEditModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                {isArabic ? 'تعديل الملف الشخصي' : 'Edit Profile'}
+              </Text>
+              <TouchableOpacity onPress={() => setEditModalVisible(false)}>
+                <FontAwesome name="times" size={24} color="#888" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.modalForm}>
+              <Text style={styles.inputLabel}>
+                {isArabic ? 'الاسم الكامل' : 'Full Name'}
+              </Text>
+              <TextInput
+                style={styles.input}
+                value={editName}
+                onChangeText={setEditName}
+                placeholder={isArabic ? 'أدخل اسمك' : 'Enter your name'}
+                placeholderTextColor="#666"
+              />
+
+              <Text style={styles.inputLabel}>
+                {isArabic ? 'اسم المستخدم' : 'Username'}
+              </Text>
+              <TextInput
+                style={styles.input}
+                value={editUsername}
+                onChangeText={setEditUsername}
+                placeholder={isArabic ? 'أدخل اسم المستخدم' : 'Enter username'}
+                placeholderTextColor="#666"
+                autoCapitalize="none"
+              />
+            </View>
+
+            <TouchableOpacity
+              style={styles.saveButton}
+              onPress={handleSaveProfile}
+              disabled={isSaving}
+            >
+              {isSaving ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.saveButtonText}>
+                  {isArabic ? 'حفظ' : 'Save'}
+                </Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -364,5 +482,57 @@ const styles = StyleSheet.create({
   },
   footer: {
     height: 100,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#1a1a1a',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 24,
+    paddingBottom: 40,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  modalTitle: {
+    color: '#fff',
+    fontSize: 20,
+    fontWeight: '600',
+  },
+  modalForm: {
+    gap: 16,
+  },
+  inputLabel: {
+    color: '#888',
+    fontSize: 14,
+    marginBottom: 4,
+  },
+  input: {
+    backgroundColor: '#222',
+    borderRadius: 10,
+    padding: 14,
+    fontSize: 16,
+    color: '#fff',
+    borderWidth: 1,
+    borderColor: '#333',
+  },
+  saveButton: {
+    backgroundColor: '#007AFF',
+    borderRadius: 10,
+    padding: 16,
+    alignItems: 'center',
+    marginTop: 24,
+  },
+  saveButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

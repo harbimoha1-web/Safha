@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Language, Theme, AppSettings, Topic } from '@/types';
+import { MAX_RECENT_SEARCHES } from '@/constants/config';
 
 interface AppState {
   // Settings
@@ -10,6 +11,9 @@ interface AppState {
   // Topics
   selectedTopics: Topic[];
   availableTopics: Topic[];
+
+  // Search
+  recentSearches: string[];
 
   // UI State
   isOnboarded: boolean;
@@ -24,6 +28,8 @@ interface AppState {
   setAvailableTopics: (topics: Topic[]) => void;
   setOnboarded: (value: boolean) => void;
   setCurrentStoryIndex: (index: number) => void;
+  addRecentSearch: (query: string) => void;
+  clearRecentSearches: () => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -37,6 +43,7 @@ export const useAppStore = create<AppState>()(
       },
       selectedTopics: [],
       availableTopics: [],
+      recentSearches: [],
       isOnboarded: false,
       currentStoryIndex: 0,
 
@@ -67,6 +74,17 @@ export const useAppStore = create<AppState>()(
       setOnboarded: (isOnboarded) => set({ isOnboarded }),
 
       setCurrentStoryIndex: (currentStoryIndex) => set({ currentStoryIndex }),
+
+      addRecentSearch: (query) =>
+        set((state) => {
+          const trimmed = query.trim();
+          if (!trimmed || trimmed.length < 2) return state;
+          // Remove duplicate and add to front, keep max recent searches
+          const filtered = state.recentSearches.filter((s) => s !== trimmed);
+          return { recentSearches: [trimmed, ...filtered].slice(0, MAX_RECENT_SEARCHES) };
+        }),
+
+      clearRecentSearches: () => set({ recentSearches: [] }),
     }),
     {
       name: 'teller-app-storage',
@@ -74,6 +92,7 @@ export const useAppStore = create<AppState>()(
       partialize: (state) => ({
         settings: state.settings,
         selectedTopics: state.selectedTopics,
+        recentSearches: state.recentSearches,
         isOnboarded: state.isOnboarded,
       }),
     }

@@ -19,28 +19,34 @@ interface StoryCardProps {
   story: Story;
   isActive: boolean;
   language: Language;
+  isSaved?: boolean;
+  onSave?: (storyId: string) => void;
+  onShare?: (storyId: string) => void;
 }
 
-export function StoryCard({ story, isActive, language }: StoryCardProps) {
+export function StoryCard({ story, isActive, language, isSaved, onSave, onShare }: StoryCardProps) {
   const isArabic = language === 'ar';
   const title = isArabic ? story.title_ar : story.title_en;
   const summary = isArabic ? story.summary_ar : story.summary_en;
 
   const handleSave = useCallback(() => {
-    // TODO: Implement save functionality
-    console.log('Save story:', story.id);
-  }, [story.id]);
+    onSave?.(story.id);
+  }, [story.id, onSave]);
 
   const handleShare = useCallback(async () => {
     try {
-      await Share.share({
+      const result = await Share.share({
         message: `${title}\n\n${summary}\n\nRead more on Teller`,
         url: story.original_url,
       });
+      // Track share if user completed the share action
+      if (result.action === Share.sharedAction) {
+        onShare?.(story.id);
+      }
     } catch (error) {
       console.error('Share error:', error);
     }
-  }, [title, summary, story.original_url]);
+  }, [title, summary, story.original_url, story.id, onShare]);
 
   const handleReadMore = useCallback(() => {
     router.push(`/story/${story.id}`);
@@ -68,6 +74,7 @@ export function StoryCard({ story, isActive, language }: StoryCardProps) {
           colors={['transparent', 'rgba(0,0,0,0.3)', 'rgba(0,0,0,0.9)']}
           locations={[0, 0.5, 1]}
           style={styles.gradient}
+          pointerEvents="box-none"
         >
           {/* Content */}
           <View style={styles.content}>
@@ -111,15 +118,25 @@ export function StoryCard({ story, isActive, language }: StoryCardProps) {
           </View>
 
           {/* Side Actions */}
-          <View style={styles.sideActions}>
-            <TouchableOpacity style={styles.actionButton} onPress={handleSave}>
-              <FontAwesome name="bookmark-o" size={28} color="#fff" />
+          <View style={styles.sideActions} pointerEvents="box-none">
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={handleSave}
+              activeOpacity={0.7}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <FontAwesome name={isSaved ? "bookmark" : "bookmark-o"} size={28} color="#fff" />
               <Text style={styles.actionCount}>
                 {formatCount(story.save_count)}
               </Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.actionButton} onPress={handleShare}>
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={handleShare}
+              activeOpacity={0.7}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
               <FontAwesome name="share" size={28} color="#fff" />
               <Text style={styles.actionCount}>
                 {formatCount(story.share_count)}

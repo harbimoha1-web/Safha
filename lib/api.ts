@@ -2,15 +2,25 @@ import { supabase } from './supabase';
 import type { Story, Topic, Profile, SavedStory } from '@/types';
 
 // Stories API
-export async function getStories(limit = 20, offset = 0): Promise<Story[]> {
-  const { data, error } = await supabase
+export async function getStories(
+  limit = 20,
+  offset = 0,
+  topicIds?: string[]
+): Promise<Story[]> {
+  let query = supabase
     .from('stories')
     .select(`
       *,
       source:sources(*)
     `)
-    .order('published_at', { ascending: false })
-    .range(offset, offset + limit - 1);
+    .order('published_at', { ascending: false });
+
+  // Filter by topics if provided
+  if (topicIds && topicIds.length > 0) {
+    query = query.overlaps('topic_ids', topicIds);
+  }
+
+  const { data, error } = await query.range(offset, offset + limit - 1);
 
   if (error) throw error;
   return data || [];
@@ -120,6 +130,17 @@ export async function unsaveStory(userId: string, storyId: string): Promise<void
   if (error) throw error;
 }
 
+export async function isStorySaved(userId: string, storyId: string): Promise<boolean> {
+  const { count, error } = await supabase
+    .from('saved_stories')
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .eq('story_id', storyId);
+
+  if (error) throw error;
+  return (count ?? 0) > 0;
+}
+
 // Interactions API
 export async function recordInteraction(
   userId: string,
@@ -135,6 +156,27 @@ export async function recordInteraction(
     });
 
   if (error) throw error;
+}
+
+// Reading History API
+export async function getViewedStories(userId: string, limit = 50): Promise<Story[]> {
+  const { data, error } = await supabase
+    .from('user_story_interactions')
+    .select(`
+      story:stories(
+        *,
+        source:sources(*)
+      )
+    `)
+    .eq('user_id', userId)
+    .eq('interaction_type', 'view')
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (error) throw error;
+  // Extract stories from the nested response
+  const items = data as unknown as Array<{ story: Story }> | null;
+  return (items || []).map(item => item.story).filter(Boolean);
 }
 
 // Search API

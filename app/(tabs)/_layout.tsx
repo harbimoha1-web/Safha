@@ -56,23 +56,17 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="history"
+        options={{
+          title: isArabic ? 'السجل' : 'History',
+          tabBarIcon: ({ color }) => <TabBarIcon name="history" color={color} />,
+        }}
+      />
+      <Tabs.Screen
         name="profile"
         options={{
           title: isArabic ? 'الإعدادات' : 'Profile',
           tabBarIcon: ({ color }) => <TabBarIcon name="user-o" color={color} />,
-        }}
-      />
-      {/* Hide the old template screens */}
-      <Tabs.Screen
-        name="index"
-        options={{
-          href: null,
-        }}
-      />
-      <Tabs.Screen
-        name="two"
-        options={{
-          href: null,
         }}
       />
     </Tabs>

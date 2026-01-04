@@ -6,69 +6,45 @@ import {
   StyleSheet,
   FlatList,
   TouchableOpacity,
-  ActivityIndicator,
   Image,
 } from 'react-native';
+import { SearchResultSkeleton } from '@/components/SkeletonLoader';
 import { FontAwesome } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useAppStore } from '@/stores';
-import { searchStories, getTopics } from '@/lib/api';
-import type { Story, Topic } from '@/types';
+import { useTopics, useSearch, useDebouncedValue } from '@/hooks';
+import { SEARCH_DEBOUNCE_MS } from '@/constants/config';
+import type { Story } from '@/types';
 
 export default function SearchScreen() {
   const [query, setQuery] = useState('');
-  const [isSearching, setIsSearching] = useState(false);
-  const [results, setResults] = useState<Story[]>([]);
-  const [topics, setTopics] = useState<Topic[]>([]);
-  const { settings } = useAppStore();
-  const debounceRef = useRef<NodeJS.Timeout | null>(null);
+  const { settings, recentSearches, addRecentSearch, clearRecentSearches } = useAppStore();
 
   const isArabic = settings.language === 'ar';
 
-  // Fetch topics on mount
+  // Debounced search query
+  const debouncedQuery = useDebouncedValue(query, SEARCH_DEBOUNCE_MS);
+
+  // React Query hooks
+  const { data: topics = [] } = useTopics();
+  const { data: results = [], isLoading: isSearching } = useSearch(debouncedQuery);
+
+  // Track last saved search to avoid duplicates
+  const lastSavedSearch = useRef<string>('');
+
+  // Add to recent searches when we get results
   useEffect(() => {
-    const loadTopics = async () => {
-      try {
-        const data = await getTopics();
-        setTopics(data);
-      } catch (err) {
-        console.error('Failed to fetch topics:', err);
-      }
-    };
-    loadTopics();
-  }, []);
+    if (results.length > 0 && debouncedQuery.length >= 2 && debouncedQuery !== lastSavedSearch.current) {
+      addRecentSearch(debouncedQuery);
+      lastSavedSearch.current = debouncedQuery;
+    }
+  }, [results.length, debouncedQuery, addRecentSearch]);
 
-  const handleSearch = useCallback(async (text: string) => {
+  const handleSearch = useCallback((text: string) => {
     setQuery(text);
-
-    // Clear previous debounce
-    if (debounceRef.current) {
-      clearTimeout(debounceRef.current);
-    }
-
-    if (text.length < 2) {
-      setResults([]);
-      setIsSearching(false);
-      return;
-    }
-
-    setIsSearching(true);
-
-    // Debounce search
-    debounceRef.current = setTimeout(async () => {
-      try {
-        const data = await searchStories(text);
-        setResults(data);
-      } catch (err) {
-        console.error('Search failed:', err);
-        setResults([]);
-      } finally {
-        setIsSearching(false);
-      }
-    }, 300);
   }, []);
 
-  const handleTopicPress = (topic: Topic) => {
+  const handleTopicPress = (topic: typeof topics[0]) => {
     // Set query to topic name and search
     const searchTerm = isArabic ? topic.name_ar : topic.name_en;
     handleSearch(searchTerm);
@@ -103,8 +79,10 @@ export default function SearchScreen() {
 
       {/* Content */}
       {isSearching ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#007AFF" />
+        <View style={styles.resultsList}>
+          {[1, 2, 3, 4, 5].map((i) => (
+            <SearchResultSkeleton key={i} />
+          ))}
         </View>
       ) : query.length > 0 && results.length === 0 ? (
         <View style={styles.emptyContainer}>
@@ -147,6 +125,34 @@ export default function SearchScreen() {
         />
       ) : (
         <View style={styles.content}>
+          {/* Recent Searches */}
+          {recentSearches.length > 0 && (
+            <>
+              <View style={styles.sectionHeader}>
+                <Text style={[styles.sectionTitle, isArabic && styles.arabicText]}>
+                  {isArabic ? 'عمليات البحث الأخيرة' : 'Recent Searches'}
+                </Text>
+                <TouchableOpacity onPress={clearRecentSearches}>
+                  <Text style={styles.clearButton}>
+                    {isArabic ? 'مسح' : 'Clear'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.recentSearches}>
+                {recentSearches.map((search, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    style={styles.recentSearchItem}
+                    onPress={() => handleSearch(search)}
+                  >
+                    <FontAwesome name="history" size={14} color="#888" />
+                    <Text style={styles.recentSearchText}>{search}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </>
+          )}
+
           {/* Topics */}
           <Text style={[styles.sectionTitle, isArabic && styles.arabicText]}>
             {isArabic ? 'المواضيع' : 'Topics'}
@@ -224,6 +230,32 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     paddingHorizontal: 16,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 24,
+    marginBottom: 16,
+  },
+  clearButton: {
+    color: '#007AFF',
+    fontSize: 14,
+  },
+  recentSearches: {
+    marginBottom: 16,
+  },
+  recentSearchItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#222',
+  },
+  recentSearchText: {
+    color: '#fff',
+    fontSize: 16,
   },
   sectionTitle: {
     color: '#fff',

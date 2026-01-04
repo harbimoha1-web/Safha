@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,65 +7,34 @@ import {
   TouchableOpacity,
   Image,
   RefreshControl,
-  ActivityIndicator,
 } from 'react-native';
+import { HistoryItemSkeleton } from '@/components/SkeletonLoader';
 import { FontAwesome } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useAppStore, useAuthStore } from '@/stores';
-import { getSavedStories, unsaveStory } from '@/lib/api';
+import { useSavedStories, useUnsaveStory } from '@/hooks';
 import type { SavedStory } from '@/types';
 
 export default function SavedScreen() {
-  const [savedStories, setSavedStories] = useState<SavedStory[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const { settings } = useAppStore();
-  const { isAuthenticated, user } = useAuthStore();
+  const { isAuthenticated } = useAuthStore();
 
   const isArabic = settings.language === 'ar';
 
-  const fetchSavedStories = useCallback(async (isRefresh = false) => {
-    if (!user) return;
-    try {
-      if (isRefresh) {
-        setRefreshing(true);
-      } else {
-        setLoading(true);
-      }
-      const data = await getSavedStories(user.id);
-      setSavedStories(data);
-    } catch (err) {
-      console.error('Failed to fetch saved stories:', err);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [user]);
-
-  useEffect(() => {
-    if (isAuthenticated && user) {
-      fetchSavedStories();
-    }
-  }, [isAuthenticated, user, fetchSavedStories]);
+  // React Query hooks
+  const { data: savedStories = [], isLoading: loading, refetch, isRefetching: refreshing } = useSavedStories();
+  const unsaveStoryMutation = useUnsaveStory();
 
   const onRefresh = useCallback(() => {
-    fetchSavedStories(true);
-  }, [fetchSavedStories]);
+    refetch();
+  }, [refetch]);
 
   const handleStoryPress = (storyId: string) => {
     router.push(`/story/${storyId}`);
   };
 
-  const handleRemove = async (savedItem: SavedStory) => {
-    if (!user) return;
-    // Optimistic update
-    setSavedStories((prev) => prev.filter((s) => s.id !== savedItem.id));
-    try {
-      await unsaveStory(user.id, savedItem.story_id);
-    } catch (err) {
-      // Revert on error
-      setSavedStories((prev) => [...prev, savedItem]);
-    }
+  const handleRemove = (savedItem: SavedStory) => {
+    unsaveStoryMutation.mutate(savedItem.story_id);
   };
 
   const renderItem = ({ item }: { item: SavedStory }) => {
@@ -130,8 +99,15 @@ export default function SavedScreen() {
   if (loading) {
     return (
       <View style={styles.container}>
-        <View style={styles.emptyContainer}>
-          <ActivityIndicator size="large" color="#007AFF" />
+        <View style={styles.header}>
+          <Text style={[styles.headerTitle, isArabic && styles.arabicText]}>
+            {isArabic ? 'المحفوظات' : 'Saved'}
+          </Text>
+        </View>
+        <View style={styles.list}>
+          {[1, 2, 3, 4, 5].map((i) => (
+            <HistoryItemSkeleton key={i} />
+          ))}
         </View>
       </View>
     );

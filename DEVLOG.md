@@ -103,3 +103,129 @@ The app now has all core features connected to the Supabase backend:
 - Recent searches persistence
 - Push notifications
 - Infinite scroll/pagination in feed
+
+---
+
+## 2026-01-04 (Session 2)
+
+### Auth Screen Localization
+**Files:** `app/(auth)/login.tsx`, `app/(auth)/register.tsx`, `app/(auth)/forgot-password.tsx`
+
+Added full Arabic/English bilingual support to all authentication screens:
+- Login screen: placeholders, buttons, alerts, error messages
+- Register screen: validation errors, terms text, all UI elements
+- Forgot password screen: including RTL arrow direction for Arabic
+
+### Fixed Empty Button Handlers in Profile
+**File:** `app/(tabs)/profile.tsx`
+
+Replaced empty `onPress={() => {}}` handlers with informative alerts:
+- Notification Settings → "Coming Soon" alert
+- Privacy Policy → placeholder policy message
+- Terms of Service → placeholder terms message
+
+### Optimized Story Detail API Call
+**Files:** `lib/api.ts`, `app/story/[id].tsx`
+
+**Problem:** Story detail page was fetching ALL saved stories just to check if one story was saved.
+
+**Solution:**
+- Added `isStorySaved(userId, storyId)` function using efficient `count` query with `head: true`
+- Updated story detail to use single-row check instead of fetching entire saved list
+
+### Added Reading History Feature
+**Files:**
+- Created `app/(tabs)/history.tsx` - new History screen
+- Added `getViewedStories()` function in `lib/api.ts`
+- Updated `app/(tabs)/_layout.tsx` - added History tab
+
+Features:
+- Shows articles the user has viewed (uses `user_story_interactions` table)
+- Sign-in prompt for unauthenticated users
+- Pull-to-refresh support
+- Bilingual UI (Arabic/English)
+
+### Fixed App Timeout / Connection Issues
+**Files:** `app/_layout.tsx`, `app/index.tsx`
+
+**Problem:** App was hanging indefinitely when trying to connect to Supabase.
+
+**Solutions:**
+1. Added 10-second timeout for auth initialization
+2. Added proper error handling with user-friendly error screen
+3. Added retry button for connection failures
+4. Created `app/index.tsx` to fix "screen does not exist" routing error
+
+### Current Tab Structure
+| Tab | File | Description |
+|-----|------|-------------|
+| Feed | `feed.tsx` | Main news feed |
+| Search | `search.tsx` | Search with topics |
+| Saved | `saved.tsx` | Bookmarked stories |
+| History | `history.tsx` | Reading history |
+| Profile | `profile.tsx` | Settings & account |
+
+---
+
+## 2026-01-04 (Session 3)
+
+### Analytics & Tracking
+
+#### Share Tracking
+**Files:** `app/story/[id].tsx`, `components/feed/StoryCard.tsx`, `app/(tabs)/feed.tsx`
+- Added `recordInteraction(userId, storyId, 'share')` when users complete share action
+- Tracks shares from both story detail page and feed cards
+- Only records if user actually shared (not cancelled)
+
+#### Skip Tracking
+**File:** `app/(tabs)/feed.tsx`
+- Track when users swipe past stories without reading
+- Calls `recordInteraction(userId, storyId, 'skip')` in onPageSelected
+- Helps identify less engaging content for analytics
+
+### Code Quality
+
+#### Constants Config File
+**File:** `constants/config.ts`
+
+Created centralized config with:
+```typescript
+PAGE_SIZE = 20
+PREFETCH_THRESHOLD = 5
+SEARCH_DEBOUNCE_MS = 300
+API_TIMEOUT_MS = 10000
+MAX_RECENT_SEARCHES = 10
+STALE_TIME = 5 minutes
+CACHE_TIME = 30 minutes
+```
+
+Updated files to use constants:
+- `hooks/useStories.ts` - PAGE_SIZE, STALE_TIME
+- `app/(tabs)/feed.tsx` - PREFETCH_THRESHOLD
+- `app/(tabs)/search.tsx` - SEARCH_DEBOUNCE_MS
+- `stores/app.ts` - MAX_RECENT_SEARCHES
+
+#### React Query Caching
+**File:** `hooks/useStories.ts`
+- Added `staleTime: 5 minutes` to reduce unnecessary API calls
+- Stories won't refetch if less than 5 minutes old
+
+### UX Improvements
+
+#### Topic Filter Chips
+**File:** `app/(tabs)/feed.tsx`
+- Added floating filter bar at top of feed
+- Shows selected topic chips when filtering is active
+- "Edit" button to modify topic preferences
+- Bilingual support (Arabic/English)
+
+#### Skeleton Loader Components
+**File:** `components/SkeletonLoader.tsx`
+
+Created reusable skeleton components:
+- `Skeleton` - Base animated placeholder
+- `StoryCardSkeleton` - Full feed card skeleton
+- `SearchResultSkeleton` - Search result placeholder
+- `HistoryItemSkeleton` - History list item placeholder
+
+Animated pulse effect for better perceived performance.

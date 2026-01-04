@@ -12,7 +12,7 @@ import {
   I18nManager,
 } from 'react-native';
 import { Link, router } from 'expo-router';
-import { useAuthStore } from '@/stores';
+import { useAuthStore, useAppStore } from '@/stores';
 
 // Enable RTL for Arabic
 I18nManager.allowRTL(true);
@@ -20,19 +20,38 @@ I18nManager.allowRTL(true);
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
   const { signInWithEmail, signInWithGoogle, signInWithApple, isLoading } = useAuthStore();
+  const { settings } = useAppStore();
+  const isArabic = settings.language === 'ar';
+
+  const validateEmail = (value: string): string | undefined => {
+    if (!value) return isArabic ? 'البريد الإلكتروني مطلوب' : 'Email is required';
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(value)) {
+      return isArabic ? 'بريد إلكتروني غير صالح' : 'Invalid email format';
+    }
+    return undefined;
+  };
+
+  const validatePassword = (value: string): string | undefined => {
+    if (!value) return isArabic ? 'كلمة المرور مطلوبة' : 'Password is required';
+    return undefined;
+  };
 
   const handleLogin = async () => {
-    if (!email || !password) {
-      Alert.alert('Error', 'Please fill in all fields');
-      return;
-    }
+    const emailError = validateEmail(email);
+    const passwordError = validatePassword(password);
+
+    setErrors({ email: emailError, password: passwordError });
+
+    if (emailError || passwordError) return;
 
     try {
       await signInWithEmail(email, password);
       router.replace('/(tabs)/feed');
     } catch (error: any) {
-      Alert.alert('Login Failed', error.message);
+      setErrors({ password: error.message });
     }
   };
 
@@ -40,7 +59,10 @@ export default function LoginScreen() {
     try {
       await signInWithGoogle();
     } catch (error: any) {
-      Alert.alert('Google Login Failed', error.message);
+      Alert.alert(
+        isArabic ? 'فشل تسجيل الدخول بجوجل' : 'Google Login Failed',
+        error.message
+      );
     }
   };
 
@@ -48,7 +70,10 @@ export default function LoginScreen() {
     try {
       await signInWithApple();
     } catch (error: any) {
-      Alert.alert('Apple Login Failed', error.message);
+      Alert.alert(
+        isArabic ? 'فشل تسجيل الدخول بأبل' : 'Apple Login Failed',
+        error.message
+      );
     }
   };
 
@@ -62,31 +87,51 @@ export default function LoginScreen() {
         <View style={styles.header}>
           <Text style={styles.logo}>تيلر</Text>
           <Text style={styles.subtitle}>Teller</Text>
-          <Text style={styles.tagline}>Your AI-Powered News Companion</Text>
+          <Text style={styles.tagline}>
+            {isArabic ? 'رفيقك الإخباري المدعوم بالذكاء الاصطناعي' : 'Your AI-Powered News Companion'}
+          </Text>
         </View>
 
         {/* Login Form */}
         <View style={styles.form}>
-          <TextInput
-            style={styles.input}
-            placeholder="Email"
-            placeholderTextColor="#999"
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoComplete="email"
-          />
+          <View>
+            <TextInput
+              style={[styles.input, isArabic && styles.arabicText, errors.email && styles.inputError]}
+              placeholder={isArabic ? 'البريد الإلكتروني' : 'Email'}
+              placeholderTextColor="#999"
+              value={email}
+              onChangeText={(text) => {
+                setEmail(text);
+                if (errors.email) setErrors((prev) => ({ ...prev, email: undefined }));
+              }}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoComplete="email"
+            />
+            {errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
+          </View>
 
-          <TextInput
-            style={styles.input}
-            placeholder="Password"
-            placeholderTextColor="#999"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            autoComplete="password"
-          />
+          <View>
+            <TextInput
+              style={[styles.input, isArabic && styles.arabicText, errors.password && styles.inputError]}
+              placeholder={isArabic ? 'كلمة المرور' : 'Password'}
+              placeholderTextColor="#999"
+              value={password}
+              onChangeText={(text) => {
+                setPassword(text);
+                if (errors.password) setErrors((prev) => ({ ...prev, password: undefined }));
+              }}
+              secureTextEntry
+              autoComplete="password"
+            />
+            {errors.password && <Text style={styles.errorText}>{errors.password}</Text>}
+          </View>
+
+          <TouchableOpacity onPress={() => router.push('/(auth)/forgot-password')}>
+            <Text style={[styles.forgotPassword, isArabic && styles.arabicText]}>
+              {isArabic ? 'نسيت كلمة المرور؟' : 'Forgot Password?'}
+            </Text>
+          </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.loginButton}
@@ -96,7 +141,9 @@ export default function LoginScreen() {
             {isLoading ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.loginButtonText}>Sign In</Text>
+              <Text style={styles.loginButtonText}>
+                {isArabic ? 'تسجيل الدخول' : 'Sign In'}
+              </Text>
             )}
           </TouchableOpacity>
         </View>
@@ -104,7 +151,9 @@ export default function LoginScreen() {
         {/* Divider */}
         <View style={styles.divider}>
           <View style={styles.dividerLine} />
-          <Text style={styles.dividerText}>or continue with</Text>
+          <Text style={styles.dividerText}>
+            {isArabic ? 'أو تابع باستخدام' : 'or continue with'}
+          </Text>
           <View style={styles.dividerLine} />
         </View>
 
@@ -114,7 +163,9 @@ export default function LoginScreen() {
             style={styles.socialButton}
             onPress={handleGoogleLogin}
           >
-            <Text style={styles.socialButtonText}>Google</Text>
+            <Text style={styles.socialButtonText}>
+              {isArabic ? 'جوجل' : 'Google'}
+            </Text>
           </TouchableOpacity>
 
           {Platform.OS === 'ios' && (
@@ -123,7 +174,7 @@ export default function LoginScreen() {
               onPress={handleAppleLogin}
             >
               <Text style={[styles.socialButtonText, styles.appleButtonText]}>
-                Apple
+                {isArabic ? 'أبل' : 'Apple'}
               </Text>
             </TouchableOpacity>
           )}
@@ -131,10 +182,14 @@ export default function LoginScreen() {
 
         {/* Register Link */}
         <View style={styles.footer}>
-          <Text style={styles.footerText}>Don't have an account? </Text>
+          <Text style={styles.footerText}>
+            {isArabic ? 'ليس لديك حساب؟ ' : "Don't have an account? "}
+          </Text>
           <Link href="/(auth)/register" asChild>
             <TouchableOpacity>
-              <Text style={styles.footerLink}>Sign Up</Text>
+              <Text style={styles.footerLink}>
+                {isArabic ? 'إنشاء حساب' : 'Sign Up'}
+              </Text>
             </TouchableOpacity>
           </Link>
         </View>
@@ -176,6 +231,14 @@ const styles = StyleSheet.create({
   form: {
     gap: 16,
   },
+  forgotPassword: {
+    color: '#007AFF',
+    fontSize: 14,
+    textAlign: 'right',
+  },
+  arabicText: {
+    textAlign: 'right',
+  },
   input: {
     backgroundColor: '#1a1a1a',
     borderRadius: 12,
@@ -184,6 +247,15 @@ const styles = StyleSheet.create({
     color: '#fff',
     borderWidth: 1,
     borderColor: '#333',
+  },
+  inputError: {
+    borderColor: '#FF6B6B',
+  },
+  errorText: {
+    color: '#FF6B6B',
+    fontSize: 12,
+    marginTop: 4,
+    marginLeft: 4,
   },
   loginButton: {
     backgroundColor: '#007AFF',

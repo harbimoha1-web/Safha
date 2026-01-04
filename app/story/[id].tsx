@@ -13,7 +13,7 @@ import {
 import { useLocalSearchParams, router } from 'expo-router';
 import { FontAwesome } from '@expo/vector-icons';
 import { useAppStore, useAuthStore } from '@/stores';
-import { getStoryById, recordInteraction, saveStory, unsaveStory, getSavedStories } from '@/lib/api';
+import { getStoryById, recordInteraction, saveStory, unsaveStory, isStorySaved } from '@/lib/api';
 import type { Story } from '@/types';
 
 export default function StoryDetailScreen() {
@@ -40,11 +40,10 @@ export default function StoryDetailScreen() {
     try {
       const data = await getStoryById(id);
       setStory(data);
-      // Check if story is already saved
+      // Check if story is already saved (optimized - single row check instead of fetching all)
       if (user && data) {
-        const savedStories = await getSavedStories(user.id);
-        const isAlreadySaved = savedStories.some(s => s.story_id === id);
-        setIsSaved(isAlreadySaved);
+        const saved = await isStorySaved(user.id, id);
+        setIsSaved(saved);
         // Record view interaction
         recordInteraction(user.id, id, 'view').catch(() => {});
       }
@@ -73,10 +72,14 @@ export default function StoryDetailScreen() {
   const handleShare = async () => {
     if (!story) return;
     try {
-      await Share.share({
+      const result = await Share.share({
         message: `${isArabic ? story.title_ar : story.title_en}\n\nRead on Teller`,
         url: story.original_url,
       });
+      // Track share if user completed the share action
+      if (result.action === Share.sharedAction && user && id) {
+        recordInteraction(user.id, id, 'share').catch(console.error);
+      }
     } catch (error) {
       console.error('Share error:', error);
     }
