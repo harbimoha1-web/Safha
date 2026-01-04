@@ -1,57 +1,78 @@
 import React from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
-import { Link, Tabs } from 'expo-router';
-import { Pressable } from 'react-native';
+import { Tabs } from 'expo-router';
+import { useAppStore } from '@/stores';
 
-import Colors from '@/constants/Colors';
-import { useColorScheme } from '@/components/useColorScheme';
-import { useClientOnlyValue } from '@/components/useClientOnlyValue';
-
-// You can explore the built-in icon families and icons on the web at https://icons.expo.fyi/
 function TabBarIcon(props: {
   name: React.ComponentProps<typeof FontAwesome>['name'];
   color: string;
 }) {
-  return <FontAwesome size={28} style={{ marginBottom: -3 }} {...props} />;
+  return <FontAwesome size={24} style={{ marginBottom: -3 }} {...props} />;
 }
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
+  const { settings } = useAppStore();
+  const isArabic = settings.language === 'ar';
 
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
-        // Disable the static render of the header on web
-        // to prevent a hydration error in React Navigation v6.
-        headerShown: useClientOnlyValue(false, true),
-      }}>
+        tabBarActiveTintColor: '#007AFF',
+        tabBarInactiveTintColor: '#888',
+        tabBarStyle: {
+          backgroundColor: '#000',
+          borderTopColor: '#222',
+          borderTopWidth: 1,
+          height: 85,
+          paddingBottom: 25,
+          paddingTop: 10,
+        },
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: '500',
+        },
+        headerShown: false,
+      }}
+    >
+      <Tabs.Screen
+        name="feed"
+        options={{
+          title: isArabic ? 'الرئيسية' : 'Feed',
+          tabBarIcon: ({ color }) => <TabBarIcon name="newspaper-o" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="search"
+        options={{
+          title: isArabic ? 'بحث' : 'Search',
+          tabBarIcon: ({ color }) => <TabBarIcon name="search" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="saved"
+        options={{
+          title: isArabic ? 'المحفوظات' : 'Saved',
+          tabBarIcon: ({ color }) => <TabBarIcon name="bookmark-o" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: isArabic ? 'الإعدادات' : 'Profile',
+          tabBarIcon: ({ color }) => <TabBarIcon name="user-o" color={color} />,
+        }}
+      />
+      {/* Hide the old template screens */}
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Tab One',
-          tabBarIcon: ({ color }) => <TabBarIcon name="code" color={color} />,
-          headerRight: () => (
-            <Link href="/modal" asChild>
-              <Pressable>
-                {({ pressed }) => (
-                  <FontAwesome
-                    name="info-circle"
-                    size={25}
-                    color={Colors[colorScheme ?? 'light'].text}
-                    style={{ marginRight: 15, opacity: pressed ? 0.5 : 1 }}
-                  />
-                )}
-              </Pressable>
-            </Link>
-          ),
+          href: null,
         }}
       />
       <Tabs.Screen
         name="two"
         options={{
-          title: 'Tab Two',
-          tabBarIcon: ({ color }) => <TabBarIcon name="code" color={color} />,
+          href: null,
         }}
       />
     </Tabs>
