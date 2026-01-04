@@ -59,9 +59,6 @@ jest.mock('expo-router', () => ({
   Link: 'Link',
 }));
 
-// Mock react-native components that don't work in Node
-jest.mock('react-native/Libraries/Animated/NativeAnimatedHelper');
-
 // Silence React Native warnings in tests
 global.console = {
   ...console,
