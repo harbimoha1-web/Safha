@@ -1,4 +1,4 @@
--- Teller App Database Schema
+-- Safha App Database Schema
 -- Run this in Supabase SQL Editor to set up your database
 
 -- ============================================
@@ -40,6 +40,14 @@ CREATE TABLE IF NOT EXISTS stories (
   title_en TEXT,
   summary_ar TEXT,
   summary_en TEXT,
+  -- AI-generated fields
+  why_it_matters_ar TEXT,
+  why_it_matters_en TEXT,
+  ai_quality_score NUMERIC(3,2),
+  is_approved BOOLEAN DEFAULT false,
+  approved_by UUID REFERENCES auth.users(id),
+  approved_at TIMESTAMPTZ,
+  -- Other fields
   image_url TEXT,
   topic_ids UUID[] DEFAULT '{}',
   published_at TIMESTAMPTZ,
@@ -71,6 +79,16 @@ CREATE TABLE IF NOT EXISTS saved_stories (
   UNIQUE(user_id, story_id)
 );
 
+-- Notes (User notes on stories)
+CREATE TABLE IF NOT EXISTS notes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
+  story_id UUID REFERENCES stories(id) ON DELETE CASCADE NOT NULL,
+  content TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- User Story Interactions (Analytics)
 CREATE TABLE IF NOT EXISTS user_story_interactions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -87,6 +105,8 @@ CREATE TABLE IF NOT EXISTS user_story_interactions (
 CREATE INDEX IF NOT EXISTS idx_stories_published_at ON stories(published_at DESC);
 CREATE INDEX IF NOT EXISTS idx_stories_topic_ids ON stories USING GIN(topic_ids);
 CREATE INDEX IF NOT EXISTS idx_saved_stories_user_id ON saved_stories(user_id);
+CREATE INDEX IF NOT EXISTS idx_notes_user_id ON notes(user_id);
+CREATE INDEX IF NOT EXISTS idx_notes_story_id ON notes(story_id);
 CREATE INDEX IF NOT EXISTS idx_user_interactions_user_id ON user_story_interactions(user_id);
 
 -- ============================================
@@ -98,6 +118,7 @@ ALTER TABLE sources ENABLE ROW LEVEL SECURITY;
 ALTER TABLE stories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE saved_stories ENABLE ROW LEVEL SECURITY;
+ALTER TABLE notes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_story_interactions ENABLE ROW LEVEL SECURITY;
 
 -- Topics: Anyone can read
@@ -130,6 +151,19 @@ CREATE POLICY "Users can save stories" ON saved_stories
   FOR INSERT WITH CHECK (auth.uid() = user_id);
 
 CREATE POLICY "Users can unsave stories" ON saved_stories
+  FOR DELETE USING (auth.uid() = user_id);
+
+-- Notes: Users can manage their own notes
+CREATE POLICY "Users can view own notes" ON notes
+  FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can create notes" ON notes
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update own notes" ON notes
+  FOR UPDATE USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can delete own notes" ON notes
   FOR DELETE USING (auth.uid() = user_id);
 
 -- User Interactions: Users can manage their own interactions

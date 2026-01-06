@@ -7,9 +7,13 @@ import {
   ScrollView,
   ActivityIndicator,
 } from 'react-native';
+import { FontAwesome } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useAppStore, useAuthStore } from '@/stores';
+import { useTheme } from '@/contexts/ThemeContext';
 import { getTopics } from '@/lib/api';
+import { spacing, borderRadius, fontSize, fontWeight } from '@/constants';
+import { getTopicIcon, getTopicColor } from '@/constants/topicIcons';
 import type { Topic } from '@/types';
 
 // Mock topics for initial development
@@ -30,6 +34,7 @@ export default function OnboardingScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const { settings } = useAppStore();
   const { setSelectedTopics, setOnboarded } = useAppStore();
+  const { colors } = useTheme();
 
   useEffect(() => {
     loadTopics();
@@ -73,13 +78,21 @@ export default function OnboardingScreen() {
   const isArabic = settings.language === 'ar';
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>
+        <TouchableOpacity
+          style={styles.closeButton}
+          onPress={() => router.back()}
+          accessibilityRole="button"
+          accessibilityLabel={isArabic ? 'إغلاق' : 'Close'}
+        >
+          <FontAwesome name="times" size={24} color={colors.textPrimary} />
+        </TouchableOpacity>
+        <Text style={[styles.title, { color: colors.textPrimary }]}>
           {isArabic ? 'اختر اهتماماتك' : 'Choose Your Interests'}
         </Text>
-        <Text style={styles.subtitle}>
+        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
           {isArabic
             ? 'اختر 3 مواضيع على الأقل لتخصيص تجربتك'
             : 'Select at least 3 topics to personalize your feed'}
@@ -94,21 +107,28 @@ export default function OnboardingScreen() {
       >
         {topics.map((topic) => {
           const isSelected = selectedIds.has(topic.id);
+          const topicColor = topic.color || getTopicColor(topic.slug);
           return (
             <TouchableOpacity
               key={topic.id}
               style={[
                 styles.topicCard,
-                topic.color && { borderColor: topic.color },
-                isSelected && topic.color && { backgroundColor: topic.color },
+                { backgroundColor: colors.surface },
+                topicColor && { borderColor: topicColor },
+                isSelected && topicColor && { backgroundColor: topicColor },
               ]}
               onPress={() => toggleTopic(topic.id)}
               activeOpacity={0.7}
             >
-              <Text style={styles.topicIcon}>{topic.icon}</Text>
+              <FontAwesome
+                name={getTopicIcon(topic.slug)}
+                size={32}
+                color={isSelected ? '#FFFFFF' : topicColor}
+              />
               <Text
                 style={[
                   styles.topicName,
+                  { color: colors.textPrimary },
                   isSelected && styles.topicNameSelected,
                 ]}
               >
@@ -120,15 +140,16 @@ export default function OnboardingScreen() {
       </ScrollView>
 
       {/* Continue Button */}
-      <View style={styles.footer}>
-        <Text style={styles.selectedCount}>
+      <View style={[styles.footer, { borderTopColor: colors.border }]}>
+        <Text style={[styles.selectedCount, { color: colors.textSecondary }]}>
           {selectedIds.size} / 3{' '}
           {isArabic ? 'مواضيع محددة' : 'topics selected'}
         </Text>
         <TouchableOpacity
           style={[
             styles.continueButton,
-            selectedIds.size < 3 && styles.continueButtonDisabled,
+            { backgroundColor: colors.primary },
+            selectedIds.size < 3 && [styles.continueButtonDisabled, { backgroundColor: colors.surfaceLight }],
           ]}
           onPress={handleContinue}
           disabled={selectedIds.size < 3 || isLoading}
@@ -136,7 +157,7 @@ export default function OnboardingScreen() {
           {isLoading ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text style={styles.continueButtonText}>
+            <Text style={[styles.continueButtonText, selectedIds.size < 3 && { color: colors.textMuted }]}>
               {isArabic ? 'متابعة' : 'Continue'}
             </Text>
           )}
@@ -149,22 +170,27 @@ export default function OnboardingScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000',
     paddingTop: 60,
   },
   header: {
-    paddingHorizontal: 24,
-    marginBottom: 32,
+    paddingHorizontal: spacing.xl,
+    marginBottom: spacing.xxl,
+    position: 'relative',
+  },
+  closeButton: {
+    position: 'absolute',
+    top: 0,
+    right: spacing.xl,
+    padding: spacing.sm,
+    zIndex: 10,
   },
   title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 8,
+    fontSize: fontSize.xxl,
+    fontWeight: fontWeight.bold,
+    marginBottom: spacing.sm,
   },
   subtitle: {
-    fontSize: 16,
-    color: '#888',
+    fontSize: fontSize.md,
     lineHeight: 22,
   },
   scrollView: {
@@ -173,55 +199,50 @@ const styles = StyleSheet.create({
   topicsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    paddingHorizontal: 16,
-    gap: 12,
-    paddingBottom: 24,
+    paddingHorizontal: spacing.lg,
+    gap: spacing.md,
+    paddingBottom: spacing.xl,
   },
   topicCard: {
     width: '47%',
     aspectRatio: 1.5,
-    backgroundColor: '#1a1a1a',
-    borderRadius: 16,
+    borderRadius: borderRadius.lg,
     borderWidth: 2,
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 8,
+    gap: spacing.sm,
   },
   topicIcon: {
     fontSize: 32,
   },
   topicName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#fff',
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.semibold,
   },
   topicNameSelected: {
     color: '#000',
   },
   footer: {
-    paddingHorizontal: 24,
-    paddingVertical: 24,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.xl,
     borderTopWidth: 1,
-    borderTopColor: '#222',
   },
   selectedCount: {
-    color: '#888',
-    fontSize: 14,
+    fontSize: fontSize.sm,
     textAlign: 'center',
-    marginBottom: 16,
+    marginBottom: spacing.lg,
   },
   continueButton: {
-    backgroundColor: '#007AFF',
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: borderRadius.md,
+    padding: spacing.lg,
     alignItems: 'center',
   },
   continueButtonDisabled: {
-    backgroundColor: '#333',
+    // backgroundColor applied dynamically
   },
   continueButtonText: {
     color: '#fff',
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: fontSize.lg,
+    fontWeight: fontWeight.semibold,
   },
 });

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,23 +10,46 @@ import {
   Modal,
   TextInput,
   ActivityIndicator,
+  Linking,
+  Platform,
 } from 'react-native';
 import { FontAwesome } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { useAppStore, useAuthStore } from '@/stores';
+import { useAppStore, useAuthStore, useSubscriptionStore, useGamificationStore } from '@/stores';
 import { updateProfile } from '@/lib/api';
-import { colors, spacing, borderRadius, fontSize, fontWeight } from '@/constants';
+import { colors as staticColors, spacing, borderRadius, fontSize, fontWeight } from '@/constants';
+import { useTheme } from '@/contexts/ThemeContext';
 
 export default function ProfileScreen() {
   const { settings, setLanguage, setTheme } = useAppStore();
   const { isAuthenticated, profile, user, signOut, setProfile } = useAuthStore();
+  const { subscription, isPremium, fetchSubscription } = useSubscriptionStore();
+  const { stats, unlockedAchievements, fetchStats, fetchAchievements } = useGamificationStore();
+  const { colors } = useTheme();
 
   const [editModalVisible, setEditModalVisible] = useState(false);
+  const [notificationModalVisible, setNotificationModalVisible] = useState(false);
   const [editName, setEditName] = useState(profile?.full_name || '');
   const [editUsername, setEditUsername] = useState(profile?.username || '');
   const [isSaving, setIsSaving] = useState(false);
 
+  // Notification settings state
+  const [notifSettings, setNotifSettings] = useState({
+    dailyDigest: false,
+    weeklyDigest: true,
+    breakingNews: true,
+    streakReminder: true,
+  });
+
   const isArabic = settings.language === 'ar';
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchSubscription();
+      fetchStats();
+      fetchAchievements();
+    }
+  }, [isAuthenticated]);
 
   const handleEditProfile = () => {
     setEditName(profile?.full_name || '');
@@ -81,21 +104,60 @@ export default function ProfileScreen() {
     setLanguage(isArabic ? 'en' : 'ar');
   };
 
+  const handleContactSupport = async () => {
+    const email = 'support@safha.app';
+    const subject = encodeURIComponent(
+      isArabic ? 'طلب دعم من صفحة' : 'Safha Support Request'
+    );
+    const body = encodeURIComponent(
+      isArabic
+        ? `مرحباً فريق صفحة،\n\nأحتاج مساعدة بخصوص:\n\n\n---\nمعرف المستخدم: ${user?.id || 'غير مسجل'}\nالإصدار: 1.0.0\nالجهاز: ${Platform.OS}`
+        : `Hi Safha Team,\n\nI need help with:\n\n\n---\nUser ID: ${user?.id || 'Not signed in'}\nVersion: 1.0.0\nDevice: ${Platform.OS}`
+    );
+
+    const mailtoUrl = `mailto:${email}?subject=${subject}&body=${body}`;
+
+    try {
+      const canOpen = await Linking.canOpenURL(mailtoUrl);
+      if (canOpen) {
+        await Linking.openURL(mailtoUrl);
+      } else {
+        Alert.alert(
+          isArabic ? 'خطأ' : 'Error',
+          isArabic
+            ? 'لا يمكن فتح تطبيق البريد. يرجى مراسلتنا على support@safha.app'
+            : 'Cannot open email app. Please email us at support@safha.app'
+        );
+      }
+    } catch (error) {
+      Alert.alert(
+        isArabic ? 'خطأ' : 'Error',
+        isArabic ? 'فشل في فتح البريد' : 'Failed to open email'
+      );
+    }
+  };
+
   const SettingsItem = ({
     icon,
     title,
     value,
     onPress,
     showArrow = true,
+    rightElement,
+    isPremiumFeature = false,
+    iconColor,
   }: {
     icon: string;
     title: string;
     value?: string;
     onPress?: () => void;
     showArrow?: boolean;
+    rightElement?: React.ReactNode;
+    isPremiumFeature?: boolean;
+    iconColor?: string;
   }) => (
     <TouchableOpacity
-      style={styles.settingsItem}
+      style={[styles.settingsItem, { borderBottomColor: colors.border }]}
       onPress={onPress}
       disabled={!onPress}
       accessibilityRole="button"
@@ -103,12 +165,18 @@ export default function ProfileScreen() {
       accessibilityState={{ disabled: !onPress }}
     >
       <View style={styles.settingsItemLeft}>
-        <FontAwesome name={icon as any} size={20} color={colors.primary} />
-        <Text style={styles.settingsItemTitle}>{title}</Text>
+        <FontAwesome name={icon as any} size={20} color={iconColor || colors.primary} />
+        <Text style={[styles.settingsItemTitle, { color: colors.textPrimary }]}>{title}</Text>
+        {isPremiumFeature && !isPremium && (
+          <View style={[styles.premiumBadge, { backgroundColor: colors.primary }]}>
+            <Text style={styles.premiumBadgeText}>PRO</Text>
+          </View>
+        )}
       </View>
       <View style={styles.settingsItemRight}>
-        {value && <Text style={styles.settingsItemValue}>{value}</Text>}
-        {showArrow && onPress && (
+        {rightElement}
+        {value && <Text style={[styles.settingsItemValue, { color: colors.textSecondary }]}>{value}</Text>}
+        {showArrow && onPress && !rightElement && (
           <FontAwesome name="chevron-right" size={14} color={colors.textMuted} />
         )}
       </View>
@@ -116,27 +184,32 @@ export default function ProfileScreen() {
   );
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={[styles.headerTitle, isArabic && styles.arabicText]}>
-          {isArabic ? 'الإعدادات' : 'Settings'}
+        <Text style={[styles.headerTitle, { color: colors.textPrimary }, isArabic && styles.arabicText]}>
+          {isArabic ? 'حسابي' : 'My Account'}
         </Text>
       </View>
 
       {/* Profile Section */}
       {isAuthenticated ? (
-        <View style={styles.profileSection}>
-          <View style={styles.avatar}>
+        <View style={[styles.profileSection, { backgroundColor: colors.surface }]}>
+          <View style={[styles.avatar, { backgroundColor: colors.surfaceLight }]}>
             <FontAwesome name="user" size={32} color={colors.textPrimary} />
           </View>
           <View style={styles.profileInfo}>
-            <Text style={styles.profileName}>
+            <Text style={[styles.profileName, { color: colors.textPrimary }]}>
               {profile?.full_name || profile?.username || 'User'}
             </Text>
-            <Text style={styles.profileEmail}>
-              {user?.email || 'No email'}
+            <Text style={[styles.profileEmail, { color: colors.textSecondary }]}>
+              {user?.email || user?.phone || 'No email'}
             </Text>
+            {stats && stats.currentStreak > 0 && (
+              <View style={styles.streakBadge}>
+                <Text style={styles.streakText}>🔥 {stats.currentStreak}</Text>
+              </View>
+            )}
           </View>
           <TouchableOpacity
             onPress={handleEditProfile}
@@ -148,7 +221,7 @@ export default function ProfileScreen() {
         </View>
       ) : (
         <TouchableOpacity
-          style={styles.signInSection}
+          style={[styles.signInSection, { backgroundColor: colors.surface }]}
           onPress={() => router.push('/(auth)/login')}
           accessibilityRole="button"
           accessibilityLabel={isArabic ? 'تسجيل الدخول لمزامنة بياناتك' : 'Sign in to sync your data'}
@@ -156,10 +229,10 @@ export default function ProfileScreen() {
           <View style={styles.signInContent}>
             <FontAwesome name="sign-in" size={24} color={colors.primary} />
             <View style={styles.signInText}>
-              <Text style={styles.signInTitle}>
+              <Text style={[styles.signInTitle, { color: colors.textPrimary }]}>
                 {isArabic ? 'تسجيل الدخول' : 'Sign In'}
               </Text>
-              <Text style={styles.signInSubtitle}>
+              <Text style={[styles.signInSubtitle, { color: colors.textSecondary }]}>
                 {isArabic
                   ? 'سجل لمزامنة بياناتك'
                   : 'Sign in to sync your data'}
@@ -170,12 +243,80 @@ export default function ProfileScreen() {
         </TouchableOpacity>
       )}
 
+      {/* Premium Section */}
+      <TouchableOpacity
+        style={[styles.premiumCard, { backgroundColor: colors.surface, borderColor: colors.border }, isPremium && styles.premiumCardActive]}
+        onPress={() => router.push('/subscription')}
+        accessibilityRole="button"
+        accessibilityLabel={isPremium ? (isArabic ? 'أنت مشترك بريميوم' : 'You are Premium') : (isArabic ? 'ترقية إلى بريميوم' : 'Upgrade to Premium')}
+      >
+        <View style={styles.premiumLeft}>
+          <FontAwesome name="star" size={24} color={isPremium ? '#FFD700' : colors.primary} />
+          <View style={styles.premiumText}>
+            <Text style={[styles.premiumTitle, { color: colors.textPrimary }]}>
+              {isPremium
+                ? (isArabic ? 'مشترك بريميوم' : 'Premium Member')
+                : (isArabic ? 'ترقية إلى بريميوم' : 'Upgrade to Premium')}
+            </Text>
+            <Text style={[styles.premiumSubtitle, { color: colors.textSecondary }]}>
+              {isPremium
+                ? (isArabic ? 'تستمتع بجميع المميزات' : 'Enjoying all features')
+                : (isArabic ? 'ملخصات يومية • بدون إعلانات • المزيد' : 'Daily digests • No ads • More')}
+            </Text>
+          </View>
+        </View>
+        <FontAwesome name="chevron-right" size={14} color={colors.textMuted} />
+      </TouchableOpacity>
+
+      {/* My Stats Section */}
+      {isAuthenticated && (
+        <View style={styles.statsSection}>
+          <View style={styles.statsHeader}>
+            <Text style={[styles.sectionTitle, { color: colors.textSecondary }, isArabic && styles.arabicText]}>
+              {isArabic ? 'إحصائياتي' : 'My Stats'}
+            </Text>
+            <TouchableOpacity
+              onPress={() => router.push('/(tabs)/achievements')}
+              accessibilityRole="button"
+              accessibilityLabel={isArabic ? 'عرض الكل' : 'View all'}
+            >
+              <Text style={[styles.viewAllText, { color: colors.primary }]}>
+                {isArabic ? 'عرض الكل' : 'View All'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.statsCards}>
+            <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
+              <FontAwesome name="fire" size={20} color="#FF6B35" />
+              <Text style={[styles.statValue, { color: colors.textPrimary }]}>{stats?.currentStreak || 0}</Text>
+              <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
+                {isArabic ? 'سلسلة' : 'Streak'}
+              </Text>
+            </View>
+            <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
+              <FontAwesome name="book" size={20} color="#4CAF50" />
+              <Text style={[styles.statValue, { color: colors.textPrimary }]}>{stats?.totalStoriesRead || 0}</Text>
+              <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
+                {isArabic ? 'مقروءة' : 'Read'}
+              </Text>
+            </View>
+            <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
+              <FontAwesome name="trophy" size={20} color="#FFD700" />
+              <Text style={[styles.statValue, { color: colors.textPrimary }]}>{unlockedAchievements?.length || 0}</Text>
+              <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
+                {isArabic ? 'إنجازات' : 'Badges'}
+              </Text>
+            </View>
+          </View>
+        </View>
+      )}
+
       {/* Language & Appearance */}
       <View style={styles.section}>
-        <Text style={[styles.sectionTitle, isArabic && styles.arabicText]}>
+        <Text style={[styles.sectionTitle, { color: colors.textSecondary }, isArabic && styles.arabicText]}>
           {isArabic ? 'اللغة والمظهر' : 'Language & Appearance'}
         </Text>
-        <View style={styles.sectionContent}>
+        <View style={[styles.sectionContent, { backgroundColor: colors.surface }]}>
           <SettingsItem
             icon="language"
             title={isArabic ? 'اللغة' : 'Language'}
@@ -213,43 +354,76 @@ export default function ProfileScreen() {
 
       {/* Notifications */}
       <View style={styles.section}>
-        <Text style={[styles.sectionTitle, isArabic && styles.arabicText]}>
+        <Text style={[styles.sectionTitle, { color: colors.textSecondary }, isArabic && styles.arabicText]}>
           {isArabic ? 'الإشعارات' : 'Notifications'}
         </Text>
-        <View style={styles.sectionContent}>
+        <View style={[styles.sectionContent, { backgroundColor: colors.surface }]}>
           <SettingsItem
             icon="bell-o"
             title={isArabic ? 'إعدادات الإشعارات' : 'Notification Settings'}
+            onPress={() => setNotificationModalVisible(true)}
+          />
+          <SettingsItem
+            icon="magic"
+            title={isArabic ? 'أنشئ ملخصي اليومي' : 'Generate My Summary'}
+            isPremiumFeature={!isPremium}
             onPress={() => {
-              Alert.alert(
-                isArabic ? 'قريبًا' : 'Coming Soon',
-                isArabic ? 'إعدادات الإشعارات ستتوفر قريبًا' : 'Notification settings will be available soon'
-              );
+              if (!isPremium) {
+                router.push('/subscription');
+              } else {
+                router.push('/summary');
+              }
             }}
+          />
+          <SettingsItem
+            icon="whatsapp"
+            title={isArabic ? 'ملخص أسبوعي واتساب' : 'Weekly WhatsApp Digest'}
+            isPremiumFeature={true}
+            iconColor={colors.whatsapp}
+            rightElement={
+              <Switch
+                value={isPremium && notifSettings.weeklyDigest}
+                onValueChange={(val) => {
+                  if (!isPremium) {
+                    router.push('/subscription');
+                  } else {
+                    setNotifSettings({ ...notifSettings, weeklyDigest: val });
+                  }
+                }}
+                trackColor={{ false: colors.border, true: colors.whatsapp }}
+                thumbColor={colors.textPrimary}
+              />
+            }
+            showArrow={false}
           />
         </View>
       </View>
 
-      {/* Topics */}
+      {/* Content */}
       <View style={styles.section}>
-        <Text style={[styles.sectionTitle, isArabic && styles.arabicText]}>
-          {isArabic ? 'المواضيع' : 'Topics'}
+        <Text style={[styles.sectionTitle, { color: colors.textSecondary }, isArabic && styles.arabicText]}>
+          {isArabic ? 'المحتوى' : 'Content'}
         </Text>
-        <View style={styles.sectionContent}>
+        <View style={[styles.sectionContent, { backgroundColor: colors.surface }]}>
           <SettingsItem
             icon="tags"
             title={isArabic ? 'إدارة اهتماماتك' : 'Manage Your Interests'}
             onPress={() => router.push('/(auth)/onboarding')}
+          />
+          <SettingsItem
+            icon="history"
+            title={isArabic ? 'سجل القراءة' : 'Reading History'}
+            onPress={() => router.push('/(tabs)/library')}
           />
         </View>
       </View>
 
       {/* About */}
       <View style={styles.section}>
-        <Text style={[styles.sectionTitle, isArabic && styles.arabicText]}>
+        <Text style={[styles.sectionTitle, { color: colors.textSecondary }, isArabic && styles.arabicText]}>
           {isArabic ? 'حول التطبيق' : 'About'}
         </Text>
-        <View style={styles.sectionContent}>
+        <View style={[styles.sectionContent, { backgroundColor: colors.surface }]}>
           <SettingsItem
             icon="info-circle"
             title={isArabic ? 'الإصدار' : 'Version'}
@@ -280,19 +454,24 @@ export default function ProfileScreen() {
               );
             }}
           />
+          <SettingsItem
+            icon="envelope-o"
+            title={isArabic ? 'تواصل مع الدعم' : 'Contact Support'}
+            onPress={handleContactSupport}
+          />
         </View>
       </View>
 
       {/* Sign Out */}
       {isAuthenticated && (
         <TouchableOpacity
-          style={styles.signOutButton}
+          style={[styles.signOutButton, { backgroundColor: colors.surface }]}
           onPress={handleSignOut}
           accessibilityRole="button"
           accessibilityLabel={isArabic ? 'تسجيل الخروج' : 'Sign out'}
         >
           <FontAwesome name="sign-out" size={20} color={colors.error} />
-          <Text style={styles.signOutText}>
+          <Text style={[styles.signOutText, { color: colors.error }]}>
             {isArabic ? 'تسجيل الخروج' : 'Sign Out'}
           </Text>
         </TouchableOpacity>
@@ -308,9 +487,9 @@ export default function ProfileScreen() {
         onRequestClose={() => setEditModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
+              <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>
                 {isArabic ? 'تعديل الملف الشخصي' : 'Edit Profile'}
               </Text>
               <TouchableOpacity
@@ -323,11 +502,11 @@ export default function ProfileScreen() {
             </View>
 
             <View style={styles.modalForm}>
-              <Text style={styles.inputLabel}>
+              <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
                 {isArabic ? 'الاسم الكامل' : 'Full Name'}
               </Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, { backgroundColor: colors.background, color: colors.textPrimary, borderColor: colors.border }]}
                 value={editName}
                 onChangeText={setEditName}
                 placeholder={isArabic ? 'أدخل اسمك' : 'Enter your name'}
@@ -335,11 +514,11 @@ export default function ProfileScreen() {
                 accessibilityLabel={isArabic ? 'الاسم الكامل' : 'Full name'}
               />
 
-              <Text style={styles.inputLabel}>
+              <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
                 {isArabic ? 'اسم المستخدم' : 'Username'}
               </Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, { backgroundColor: colors.background, color: colors.textPrimary, borderColor: colors.border }]}
                 value={editUsername}
                 onChangeText={setEditUsername}
                 placeholder={isArabic ? 'أدخل اسم المستخدم' : 'Enter username'}
@@ -350,7 +529,7 @@ export default function ProfileScreen() {
             </View>
 
             <TouchableOpacity
-              style={styles.saveButton}
+              style={[styles.saveButton, { backgroundColor: colors.primary }]}
               onPress={handleSaveProfile}
               disabled={isSaving}
               accessibilityRole="button"
@@ -358,12 +537,113 @@ export default function ProfileScreen() {
               accessibilityState={{ disabled: isSaving }}
             >
               {isSaving ? (
-                <ActivityIndicator color={colors.textPrimary} />
+                <ActivityIndicator color="#fff" />
               ) : (
                 <Text style={styles.saveButtonText}>
                   {isArabic ? 'حفظ' : 'Save'}
                 </Text>
               )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Notification Settings Modal */}
+      <Modal
+        visible={notificationModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setNotificationModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>
+                {isArabic ? 'إعدادات الإشعارات' : 'Notification Settings'}
+              </Text>
+              <TouchableOpacity
+                onPress={() => setNotificationModalVisible(false)}
+                accessibilityRole="button"
+                accessibilityLabel={isArabic ? 'إغلاق' : 'Close'}
+              >
+                <FontAwesome name="times" size={24} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.notifList}>
+              <View style={[styles.notifItem, { backgroundColor: colors.background }]}>
+                <View>
+                  <Text style={[styles.notifTitle, { color: colors.textPrimary }]}>
+                    {isArabic ? 'ملخص يومي' : 'Daily Digest'}
+                  </Text>
+                  <Text style={[styles.notifDesc, { color: colors.textSecondary }]}>
+                    {isArabic ? 'أهم أخبار اليوم كل صباح' : 'Top stories every morning'}
+                  </Text>
+                </View>
+                <View style={styles.notifRight}>
+                  {!isPremium && (
+                    <View style={[styles.premiumBadge, { backgroundColor: colors.primary }]}>
+                      <Text style={styles.premiumBadgeText}>PRO</Text>
+                    </View>
+                  )}
+                  <Switch
+                    value={isPremium && notifSettings.dailyDigest}
+                    onValueChange={(val) => {
+                      if (!isPremium) {
+                        router.push('/subscription');
+                        setNotificationModalVisible(false);
+                      } else {
+                        setNotifSettings({ ...notifSettings, dailyDigest: val });
+                      }
+                    }}
+                    trackColor={{ false: colors.border, true: colors.primary }}
+                    thumbColor="#fff"
+                  />
+                </View>
+              </View>
+
+              <View style={[styles.notifItem, { backgroundColor: colors.background }]}>
+                <View>
+                  <Text style={[styles.notifTitle, { color: colors.textPrimary }]}>
+                    {isArabic ? 'أخبار عاجلة' : 'Breaking News'}
+                  </Text>
+                  <Text style={[styles.notifDesc, { color: colors.textSecondary }]}>
+                    {isArabic ? 'تنبيهات فورية للأخبار المهمة' : 'Instant alerts for important news'}
+                  </Text>
+                </View>
+                <Switch
+                  value={notifSettings.breakingNews}
+                  onValueChange={(val) => setNotifSettings({ ...notifSettings, breakingNews: val })}
+                  trackColor={{ false: colors.border, true: colors.primary }}
+                  thumbColor="#fff"
+                />
+              </View>
+
+              <View style={[styles.notifItem, { backgroundColor: colors.background }]}>
+                <View>
+                  <Text style={[styles.notifTitle, { color: colors.textPrimary }]}>
+                    {isArabic ? 'تذكير السلسلة' : 'Streak Reminder'}
+                  </Text>
+                  <Text style={[styles.notifDesc, { color: colors.textSecondary }]}>
+                    {isArabic ? 'تذكير للحفاظ على سلسلتك' : 'Reminder to keep your streak'}
+                  </Text>
+                </View>
+                <Switch
+                  value={notifSettings.streakReminder}
+                  onValueChange={(val) => setNotifSettings({ ...notifSettings, streakReminder: val })}
+                  trackColor={{ false: colors.border, true: colors.primary }}
+                  thumbColor="#fff"
+                />
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={[styles.saveButton, { backgroundColor: colors.primary }]}
+              onPress={() => setNotificationModalVisible(false)}
+            >
+              <Text style={styles.saveButtonText}>
+                {isArabic ? 'تم' : 'Done'}
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -375,7 +655,6 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
   },
   header: {
     paddingHorizontal: spacing.xl,
@@ -383,7 +662,6 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xl,
   },
   headerTitle: {
-    color: colors.textPrimary,
     fontSize: fontSize.xxxl,
     fontWeight: fontWeight.bold,
   },
@@ -393,7 +671,6 @@ const styles = StyleSheet.create({
   profileSection: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surface,
     marginHorizontal: spacing.lg,
     borderRadius: borderRadius.md,
     padding: spacing.lg,
@@ -403,7 +680,6 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: colors.surfaceLight,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -411,20 +687,27 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   profileName: {
-    color: colors.textPrimary,
     fontSize: fontSize.lg,
     fontWeight: fontWeight.semibold,
   },
   profileEmail: {
-    color: colors.textSecondary,
     fontSize: fontSize.sm,
     marginTop: 2,
+  },
+  streakBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: spacing.xs,
+  },
+  streakText: {
+    color: '#FF6B35',
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.semibold,
   },
   signInSection: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: colors.surface,
     marginHorizontal: spacing.lg,
     borderRadius: borderRadius.md,
     padding: spacing.lg,
@@ -436,20 +719,56 @@ const styles = StyleSheet.create({
   },
   signInText: {},
   signInTitle: {
-    color: colors.textPrimary,
     fontSize: fontSize.md,
     fontWeight: fontWeight.semibold,
   },
   signInSubtitle: {
-    color: colors.textSecondary,
     fontSize: fontSize.xs,
     marginTop: 2,
+  },
+  premiumCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.lg,
+    borderRadius: borderRadius.md,
+    padding: spacing.lg,
+    borderWidth: 1,
+  },
+  premiumCardActive: {
+    borderColor: '#FFD700',
+    backgroundColor: 'rgba(255, 215, 0, 0.1)',
+  },
+  premiumLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  premiumText: {},
+  premiumTitle: {
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.semibold,
+  },
+  premiumSubtitle: {
+    fontSize: fontSize.xs,
+    marginTop: 2,
+  },
+  premiumBadge: {
+    paddingHorizontal: spacing.xs,
+    paddingVertical: 2,
+    borderRadius: borderRadius.xs,
+    marginLeft: spacing.xs,
+  },
+  premiumBadgeText: {
+    color: '#fff',
+    fontSize: 9,
+    fontWeight: fontWeight.bold,
   },
   section: {
     marginTop: spacing.xxxl,
   },
   sectionTitle: {
-    color: colors.textSecondary,
     fontSize: 13,
     fontWeight: fontWeight.semibold,
     textTransform: 'uppercase',
@@ -458,7 +777,6 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   sectionContent: {
-    backgroundColor: colors.surface,
     marginHorizontal: spacing.lg,
     borderRadius: borderRadius.md,
   },
@@ -468,7 +786,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     padding: spacing.lg,
     borderBottomWidth: 1,
-    borderBottomColor: '#222',
   },
   settingsItemLeft: {
     flexDirection: 'row',
@@ -476,7 +793,6 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   settingsItemTitle: {
-    color: colors.textPrimary,
     fontSize: fontSize.md,
   },
   settingsItemRight: {
@@ -485,7 +801,6 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   settingsItemValue: {
-    color: colors.textSecondary,
     fontSize: fontSize.sm,
   },
   signOutButton: {
@@ -495,12 +810,10 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     marginHorizontal: spacing.lg,
     marginTop: spacing.xxxl,
-    backgroundColor: colors.surface,
     borderRadius: borderRadius.md,
     padding: spacing.lg,
   },
   signOutText: {
-    color: colors.error,
     fontSize: fontSize.md,
     fontWeight: fontWeight.semibold,
   },
@@ -509,11 +822,10 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: colors.surface,
     borderTopLeftRadius: borderRadius.xl,
     borderTopRightRadius: borderRadius.xl,
     padding: spacing.xxl,
@@ -526,7 +838,6 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xxl,
   },
   modalTitle: {
-    color: colors.textPrimary,
     fontSize: fontSize.xl,
     fontWeight: fontWeight.semibold,
   },
@@ -534,29 +845,81 @@ const styles = StyleSheet.create({
     gap: spacing.lg,
   },
   inputLabel: {
-    color: colors.textSecondary,
     fontSize: fontSize.sm,
     marginBottom: spacing.xs,
   },
   input: {
-    backgroundColor: '#222',
     borderRadius: 10,
     padding: spacing.lg - 2,
     fontSize: fontSize.md,
-    color: colors.textPrimary,
     borderWidth: 1,
-    borderColor: colors.border,
   },
   saveButton: {
-    backgroundColor: colors.primary,
     borderRadius: 10,
     padding: spacing.lg,
     alignItems: 'center',
     marginTop: spacing.xxl,
   },
   saveButtonText: {
-    color: colors.textPrimary,
+    color: '#fff',
     fontSize: fontSize.md,
     fontWeight: fontWeight.semibold,
+  },
+  notifList: {
+    gap: spacing.md,
+  },
+  notifItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderRadius: borderRadius.md,
+    padding: spacing.lg,
+  },
+  notifTitle: {
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.medium,
+  },
+  notifDesc: {
+    fontSize: fontSize.xs,
+    marginTop: 2,
+  },
+  notifRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  statsSection: {
+    marginTop: spacing.lg,
+    marginHorizontal: spacing.lg,
+  },
+  statsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+    paddingHorizontal: spacing.xs,
+  },
+  viewAllText: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.medium,
+  },
+  statsCards: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  statCard: {
+    flex: 1,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    alignItems: 'center',
+  },
+  statValue: {
+    fontSize: fontSize.xl,
+    fontWeight: fontWeight.bold,
+    marginTop: spacing.xs,
+  },
+  statLabel: {
+    fontSize: fontSize.xs,
+    marginTop: 2,
   },
 });

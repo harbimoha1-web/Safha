@@ -17,6 +17,7 @@ interface AppState {
 
   // UI State
   isOnboarded: boolean;
+  hasSurveyCompleted: boolean;
   currentStoryIndex: number;
 
   // Actions
@@ -27,6 +28,7 @@ interface AppState {
   setSelectedTopics: (topics: Topic[]) => void;
   setAvailableTopics: (topics: Topic[]) => void;
   setOnboarded: (value: boolean) => void;
+  setSurveyCompleted: (value: boolean) => void;
   setCurrentStoryIndex: (index: number) => void;
   addRecentSearch: (query: string) => void;
   clearRecentSearches: () => void;
@@ -45,6 +47,7 @@ export const useAppStore = create<AppState>()(
       availableTopics: [],
       recentSearches: [],
       isOnboarded: false,
+      hasSurveyCompleted: false,
       currentStoryIndex: 0,
 
       setLanguage: (language) =>
@@ -73,6 +76,8 @@ export const useAppStore = create<AppState>()(
 
       setOnboarded: (isOnboarded) => set({ isOnboarded }),
 
+      setSurveyCompleted: (hasSurveyCompleted) => set({ hasSurveyCompleted }),
+
       setCurrentStoryIndex: (currentStoryIndex) => set({ currentStoryIndex }),
 
       addRecentSearch: (query) =>
@@ -87,13 +92,14 @@ export const useAppStore = create<AppState>()(
       clearRecentSearches: () => set({ recentSearches: [] }),
     }),
     {
-      name: 'teller-app-storage',
+      name: 'safha-app-storage',
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (state) => ({
         settings: state.settings,
         selectedTopics: state.selectedTopics,
         recentSearches: state.recentSearches,
         isOnboarded: state.isOnboarded,
+        hasSurveyCompleted: state.hasSurveyCompleted,
       }),
     }
   )

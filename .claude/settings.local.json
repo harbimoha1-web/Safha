@@ -10,7 +10,11 @@
       "Bash(ls:*)",
       "Skill(manager)",
       "Bash(npx tsc:*)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(npm test:*)",
+      "WebFetch(domain:www.notion.so)",
+      "Bash(npx expo start:*)",
+      "Bash(timeout:*)"
     ]
   }
 }

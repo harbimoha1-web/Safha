@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { colors, spacing, borderRadius, fontSize, fontWeight } from '@/constants';
+import { captureException } from '@/lib/errorTracking';
 
 // Global Error Boundary for runtime errors
 class AppErrorBoundary extends React.Component<
@@ -19,6 +20,11 @@ class AppErrorBoundary extends React.Component<
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     console.error('App Error Boundary caught:', error, errorInfo);
+    // Report error to tracking service
+    captureException(error, {
+      componentStack: errorInfo.componentStack,
+      source: 'AppErrorBoundary',
+    });
   }
 
   render() {
@@ -85,7 +91,7 @@ const boundaryStyles = StyleSheet.create({
     fontWeight: fontWeight.semibold,
   },
 });
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
+import { DarkTheme, DefaultTheme, ThemeProvider as NavigationThemeProvider } from '@react-navigation/native';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { useFonts } from 'expo-font';
 import { Stack, router, useSegments } from 'expo-router';
@@ -93,10 +99,13 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 
-import { useColorScheme } from '@/components/useColorScheme';
 import { useAuthStore, useAppStore } from '@/stores';
 import { supabase } from '@/lib/supabase';
 import { queryClient } from '@/lib/queryClient';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { ToastProvider } from '@/components/Toast';
+import { ThemeProvider, useTheme } from '@/contexts/ThemeContext';
+import { initializeErrorTracking, setUser } from '@/lib/errorTracking';
 
 export {
   ErrorBoundary,
@@ -111,7 +120,7 @@ SplashScreen.preventAutoHideAsync();
 function useProtectedRoute(onError: (error: string) => void, onReady: () => void) {
   const segments = useSegments();
   const { isAuthenticated, isLoading, setSession, fetchProfile } = useAuthStore();
-  const { isOnboarded } = useAppStore();
+  const { isOnboarded, hasSurveyCompleted } = useAppStore();
 
   useEffect(() => {
     let timeoutId: ReturnType<typeof setTimeout>;
@@ -163,26 +172,45 @@ function useProtectedRoute(onError: (error: string) => void, onReady: () => void
     if (isLoading) return;
 
     const inAuthGroup = segments[0] === '(auth)';
+    const currentPath = (segments as string[])[1] || '';
+
+    // First time users - show welcome survey (before any login/onboarding)
+    if (!hasSurveyCompleted && !inAuthGroup) {
+      router.replace('/(auth)/welcome-survey');
+      return;
+    }
+
+    // Skip redirect if already on welcome-survey or onboarding
+    if (currentPath === 'welcome-survey' || currentPath === 'onboarding') {
+      return;
+    }
 
     if (!isAuthenticated && !inAuthGroup) {
-      // User is not authenticated, redirect to login
-      // For now, allow guest access to feed
-    } else if (isAuthenticated && inAuthGroup && !(segments as string[])[1]?.includes('onboarding')) {
-      // User is authenticated but in auth group (not onboarding)
+      // User is not authenticated, allow guest access to feed
+    } else if (isAuthenticated && inAuthGroup) {
+      // User is authenticated but in auth group
       if (!isOnboarded) {
         router.replace('/(auth)/onboarding');
       } else {
         router.replace('/(tabs)/feed');
       }
     }
-  }, [isAuthenticated, segments, isLoading, isOnboarded]);
+  }, [isAuthenticated, segments, isLoading, isOnboarded, hasSurveyCompleted]);
 }
 
 export default function RootLayout() {
   const [loaded, error] = useFonts({
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
+    'Tajawal-Regular': require('../assets/fonts/Tajawal-Regular.ttf'),
+    'Tajawal-Medium': require('../assets/fonts/Tajawal-Medium.ttf'),
+    'Tajawal-Bold': require('../assets/fonts/Tajawal-Bold.ttf'),
     ...FontAwesome.font,
   });
+
+  // Initialize error tracking on app start
+  useEffect(() => {
+    initializeErrorTracking();
+  }, []);
 
   useEffect(() => {
     if (error) throw error;
@@ -206,7 +234,6 @@ export default function RootLayout() {
 }
 
 function RootLayoutNav() {
-  const colorScheme = useColorScheme();
   const { settings } = useAppStore();
   const [initError, setInitError] = useState<string | null>(null);
   const [isReady, setIsReady] = useState(false);
@@ -215,9 +242,6 @@ function RootLayoutNav() {
     (error) => setInitError(error),
     () => setIsReady(true)
   );
-
-  // Use dark theme by default for Teller
-  const theme = settings.theme === 'light' ? DefaultTheme : DarkTheme;
 
   // Show error screen if initialization failed
   if (initError) {
@@ -245,9 +269,25 @@ function RootLayoutNav() {
   }
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <ThemeProvider value={theme}>
-        <StatusBar style="light" />
+    <SafeAreaProvider>
+      <QueryClientProvider client={queryClient}>
+        <ThemeProvider>
+          <ThemedApp />
+        </ThemeProvider>
+      </QueryClientProvider>
+    </SafeAreaProvider>
+  );
+}
+
+// Inner component that can use useTheme
+function ThemedApp() {
+  const { isDark, colors: themeColors } = useTheme();
+  const navTheme = isDark ? DarkTheme : DefaultTheme;
+
+  return (
+    <NavigationThemeProvider value={navTheme}>
+      <ToastProvider>
+        <StatusBar style={isDark ? 'light' : 'dark'} />
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="(auth)" options={{ headerShown: false }} />
@@ -260,8 +300,8 @@ function RootLayoutNav() {
           />
           <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
         </Stack>
-      </ThemeProvider>
-    </QueryClientProvider>
+      </ToastProvider>
+    </NavigationThemeProvider>
   );
 }
 

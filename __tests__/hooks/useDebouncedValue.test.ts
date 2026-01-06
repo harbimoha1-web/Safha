@@ -19,7 +19,7 @@ describe('useDebouncedValue', () => {
 
   it('should debounce value updates', () => {
     const { result, rerender } = renderHook(
-      ({ value, delay }) => useDebouncedValue(value, delay),
+      ({ value, delay }: { value: string; delay: number }) => useDebouncedValue(value, delay),
       { initialProps: { value: 'initial', delay: 500 } }
     );
 
@@ -40,7 +40,7 @@ describe('useDebouncedValue', () => {
 
   it('should reset timer on rapid value changes', () => {
     const { result, rerender } = renderHook(
-      ({ value, delay }) => useDebouncedValue(value, delay),
+      ({ value, delay }: { value: string; delay: number }) => useDebouncedValue(value, delay),
       { initialProps: { value: 'initial', delay: 300 } }
     );
 
@@ -73,7 +73,7 @@ describe('useDebouncedValue', () => {
 
   it('should work with different delay values', () => {
     const { result, rerender } = renderHook(
-      ({ value, delay }) => useDebouncedValue(value, delay),
+      ({ value, delay }: { value: string; delay: number }) => useDebouncedValue(value, delay),
       { initialProps: { value: 'test', delay: 1000 } }
     );
 
@@ -94,7 +94,7 @@ describe('useDebouncedValue', () => {
 
   it('should work with number values', () => {
     const { result, rerender } = renderHook(
-      ({ value, delay }) => useDebouncedValue(value, delay),
+      ({ value, delay }: { value: number; delay: number }) => useDebouncedValue(value, delay),
       { initialProps: { value: 0, delay: 200 } }
     );
 
@@ -112,7 +112,7 @@ describe('useDebouncedValue', () => {
     const updatedObj = { name: 'updated' };
 
     const { result, rerender } = renderHook(
-      ({ value, delay }) => useDebouncedValue(value, delay),
+      ({ value, delay }: { value: { name: string }; delay: number }) => useDebouncedValue(value, delay),
       { initialProps: { value: initialObj, delay: 200 } }
     );
 
@@ -127,7 +127,7 @@ describe('useDebouncedValue', () => {
 
   it('should handle zero delay', () => {
     const { result, rerender } = renderHook(
-      ({ value, delay }) => useDebouncedValue(value, delay),
+      ({ value, delay }: { value: string; delay: number }) => useDebouncedValue(value, delay),
       { initialProps: { value: 'initial', delay: 0 } }
     );
 
@@ -142,8 +142,8 @@ describe('useDebouncedValue', () => {
   });
 
   it('should cleanup timer on unmount', () => {
-    const { result, rerender, unmount } = renderHook(
-      ({ value, delay }) => useDebouncedValue(value, delay),
+    const { rerender, unmount } = renderHook(
+      ({ value, delay }: { value: string; delay: number }) => useDebouncedValue(value, delay),
       { initialProps: { value: 'initial', delay: 500 } }
     );
 

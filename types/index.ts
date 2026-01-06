@@ -1,4 +1,4 @@
-// Teller App Type Definitions
+// Safha App Type Definitions
 
 export interface Profile {
   id: string;
@@ -51,6 +51,14 @@ export interface Story {
   title_en: string | null;
   summary_ar: string | null;
   summary_en: string | null;
+  // AI-generated fields
+  why_it_matters_ar: string | null;
+  why_it_matters_en: string | null;
+  ai_quality_score: number | null;
+  is_approved: boolean;
+  approved_by: string | null;
+  approved_at: string | null;
+  // Other fields
   image_url: string | null;
   topic_ids: string[];
   topics?: Topic[];
@@ -59,6 +67,22 @@ export interface Story {
   view_count: number;
   save_count: number;
   share_count: number;
+}
+
+// AI Types
+export interface AISummaryRequest {
+  title: string;
+  content: string;
+  source_language: 'ar' | 'en';
+}
+
+export interface AISummaryResponse {
+  summary_ar: string;
+  summary_en: string;
+  why_it_matters_ar: string;
+  why_it_matters_en: string;
+  quality_score: number;
+  topics: string[];
 }
 
 export interface UserStoryInteraction {
@@ -75,6 +99,56 @@ export interface SavedStory {
   story_id: string;
   story?: Story;
   created_at: string;
+}
+
+export interface Note {
+  id: string;
+  user_id: string;
+  story_id: string;
+  content: string;
+  created_at: string;
+  updated_at: string;
+  story?: Story;
+}
+
+// RSS Types
+export interface RSSSource {
+  id: string;
+  name: string;
+  feed_url: string;
+  website_url: string | null;
+  language: 'ar' | 'en';
+  category: string | null;
+  logo_url: string | null;
+  is_active: boolean;
+  reliability_score: number;
+  last_fetched_at: string | null;
+  fetch_interval_minutes: number;
+  error_count: number;
+  last_error: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RawArticle {
+  id: string;
+  rss_source_id: string;
+  rss_source?: RSSSource;
+  guid: string | null;
+  original_url: string;
+  original_title: string | null;
+  original_content: string | null;
+  original_description: string | null;
+  author: string | null;
+  image_url: string | null;
+  published_at: string | null;
+  fetched_at: string;
+  status: 'pending' | 'processing' | 'processed' | 'failed' | 'duplicate' | 'rejected';
+  processed_at: string | null;
+  story_id: string | null;
+  error_message: string | null;
+  retry_count: number;
+  content_hash: string | null;
 }
 
 // App State Types

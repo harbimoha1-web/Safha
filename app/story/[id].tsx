@@ -13,7 +13,9 @@ import {
 import { useLocalSearchParams, router } from 'expo-router';
 import { FontAwesome } from '@expo/vector-icons';
 import { useAppStore, useAuthStore } from '@/stores';
+import { useTheme } from '@/contexts/ThemeContext';
 import { getStoryById, recordInteraction, saveStory, unsaveStory, isStorySaved } from '@/lib/api';
+import { spacing, borderRadius, fontSize, fontWeight } from '@/constants/theme';
 import type { Story } from '@/types';
 
 export default function StoryDetailScreen() {
@@ -24,6 +26,7 @@ export default function StoryDetailScreen() {
   const [isSaved, setIsSaved] = useState(false);
   const { settings } = useAppStore();
   const { user } = useAuthStore();
+  const { colors } = useTheme();
 
   const isArabic = settings.language === 'ar';
 
@@ -73,7 +76,7 @@ export default function StoryDetailScreen() {
     if (!story) return;
     try {
       const result = await Share.share({
-        message: `${isArabic ? story.title_ar : story.title_en}\n\nRead on Teller`,
+        message: `${isArabic ? story.title_ar : story.title_en}\n\nRead on Safha`,
         url: story.original_url,
       });
       // Track share if user completed the share action
@@ -93,20 +96,20 @@ export default function StoryDetailScreen() {
 
   if (isLoading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#007AFF" />
+      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
 
   if (error || !story) {
     return (
-      <View style={styles.errorContainer}>
-        <Text style={styles.errorText}>
+      <View style={[styles.errorContainer, { backgroundColor: colors.background }]}>
+        <Text style={[styles.errorText, { color: colors.textPrimary }]}>
           {error || (isArabic ? 'الخبر غير موجود' : 'Story not found')}
         </Text>
         <TouchableOpacity onPress={() => router.back()}>
-          <Text style={styles.backLink}>
+          <Text style={[styles.backLink, { color: colors.primary }]}>
             {isArabic ? 'رجوع' : 'Go Back'}
           </Text>
         </TouchableOpacity>
@@ -115,7 +118,7 @@ export default function StoryDetailScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
@@ -159,11 +162,11 @@ export default function StoryDetailScreen() {
         {/* Source & Date */}
         <View style={styles.meta}>
           {story.source && (
-            <View style={styles.sourceBadge}>
-              <Text style={styles.sourceText}>{story.source.name}</Text>
+            <View style={[styles.sourceBadge, { backgroundColor: colors.surface }]}>
+              <Text style={[styles.sourceText, { color: colors.textPrimary }]}>{story.source.name}</Text>
             </View>
           )}
-          <Text style={styles.dateText}>
+          <Text style={[styles.dateText, { color: colors.textMuted }]}>
             {new Date(story.published_at || story.created_at).toLocaleDateString(
               isArabic ? 'ar-SA' : 'en-US',
               { year: 'numeric', month: 'long', day: 'numeric' }
@@ -172,42 +175,42 @@ export default function StoryDetailScreen() {
         </View>
 
         {/* Title */}
-        <Text style={[styles.title, isArabic && styles.arabicText]}>
+        <Text style={[styles.title, { color: colors.textPrimary }, isArabic && styles.arabicText]}>
           {isArabic ? story.title_ar : story.title_en}
         </Text>
 
         {/* Summary */}
-        <Text style={[styles.summary, isArabic && styles.arabicText]}>
+        <Text style={[styles.summary, { color: colors.textSecondary }, isArabic && styles.arabicText]}>
           {isArabic ? story.summary_ar : story.summary_en}
         </Text>
 
         {/* Stats */}
-        <View style={styles.stats}>
+        <View style={[styles.stats, { borderTopColor: colors.border }]}>
           <View style={styles.statItem}>
-            <FontAwesome name="eye" size={16} color="#888" />
-            <Text style={styles.statText}>{story.view_count}</Text>
+            <FontAwesome name="eye" size={16} color={colors.textMuted} />
+            <Text style={[styles.statText, { color: colors.textMuted }]}>{story.view_count}</Text>
           </View>
           <View style={styles.statItem}>
-            <FontAwesome name="bookmark-o" size={16} color="#888" />
-            <Text style={styles.statText}>{story.save_count}</Text>
+            <FontAwesome name="bookmark-o" size={16} color={colors.textMuted} />
+            <Text style={[styles.statText, { color: colors.textMuted }]}>{story.save_count}</Text>
           </View>
           <View style={styles.statItem}>
-            <FontAwesome name="share" size={16} color="#888" />
-            <Text style={styles.statText}>{story.share_count}</Text>
+            <FontAwesome name="share" size={16} color={colors.textMuted} />
+            <Text style={[styles.statText, { color: colors.textMuted }]}>{story.share_count}</Text>
           </View>
         </View>
 
         {/* Read Original Button */}
         <TouchableOpacity
-          style={styles.originalButton}
+          style={[styles.originalButton, { backgroundColor: colors.surface, borderColor: colors.primary }]}
           onPress={handleOpenOriginal}
           accessibilityRole="button"
           accessibilityLabel={isArabic ? 'قراءة المقال الأصلي' : 'Read original article'}
         >
-          <Text style={styles.originalButtonText}>
+          <Text style={[styles.originalButtonText, { color: colors.primary }]}>
             {isArabic ? 'قراءة المقال الأصلي' : 'Read Original Article'}
           </Text>
-          <FontAwesome name="external-link" size={16} color="#007AFF" />
+          <FontAwesome name="external-link" size={16} color={colors.primary} />
         </TouchableOpacity>
 
         <View style={styles.footer} />

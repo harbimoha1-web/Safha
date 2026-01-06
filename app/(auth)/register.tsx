@@ -88,7 +88,7 @@ export default function RegisterScreen() {
             {isArabic ? 'إنشاء حساب' : 'Create Account'}
           </Text>
           <Text style={[styles.subtitle, isArabic && styles.arabicText]}>
-            {isArabic ? 'انضم إلى تيلر وابقَ على اطلاع' : 'Join Teller and stay informed'}
+            {isArabic ? 'انضم إلى صفحة وابقَ على اطلاع' : 'Join Safha and stay informed'}
           </Text>
         </View>
 

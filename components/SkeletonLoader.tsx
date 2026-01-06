@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { View, StyleSheet, Animated, Dimensions } from 'react-native';
+import { useTheme } from '@/contexts/ThemeContext';
 
 const { width } = Dimensions.get('window');
 
@@ -16,6 +17,7 @@ export function Skeleton({
   borderRadius = 4,
   style
 }: SkeletonProps) {
+  const { colors } = useTheme();
   const opacity = useRef(new Animated.Value(0.3)).current;
 
   useEffect(() => {
@@ -41,7 +43,7 @@ export function Skeleton({
     <Animated.View
       style={[
         styles.skeleton,
-        { width: w, height, borderRadius, opacity },
+        { width: w, height, borderRadius, opacity, backgroundColor: colors.surfaceLight },
         style,
       ]}
     />
@@ -49,10 +51,11 @@ export function Skeleton({
 }
 
 export function StoryCardSkeleton() {
+  const { colors } = useTheme();
   return (
-    <View style={styles.cardContainer}>
+    <View style={[styles.cardContainer, { backgroundColor: colors.background }]}>
       {/* Background placeholder */}
-      <View style={styles.cardBackground}>
+      <View style={[styles.cardBackground, { backgroundColor: colors.surface }]}>
         {/* Content area */}
         <View style={styles.cardContent}>
           {/* Source badge */}
@@ -87,8 +90,9 @@ export function StoryCardSkeleton() {
 }
 
 export function SearchResultSkeleton() {
+  const { colors } = useTheme();
   return (
-    <View style={styles.searchResult}>
+    <View style={[styles.searchResult, { backgroundColor: colors.surface }]}>
       <Skeleton width={100} height={80} borderRadius={12} />
       <View style={styles.searchContent}>
         <Skeleton width="90%" height={16} style={styles.marginBottomSmall} />
@@ -100,8 +104,9 @@ export function SearchResultSkeleton() {
 }
 
 export function HistoryItemSkeleton() {
+  const { colors } = useTheme();
   return (
-    <View style={styles.historyItem}>
+    <View style={[styles.historyItem, { backgroundColor: colors.surface }]}>
       <Skeleton width={100} height={80} borderRadius={12} />
       <View style={styles.historyContent}>
         <Skeleton width="85%" height={15} style={styles.marginBottomSmall} />
@@ -114,7 +119,7 @@ export function HistoryItemSkeleton() {
 
 const styles = StyleSheet.create({
   skeleton: {
-    backgroundColor: '#333',
+    // backgroundColor set dynamically via theme
   },
   marginBottom: {
     marginBottom: 8,
@@ -125,13 +130,13 @@ const styles = StyleSheet.create({
   cardContainer: {
     flex: 1,
     width,
-    backgroundColor: '#000',
+    // backgroundColor set dynamically via theme
   },
   cardBackground: {
     flex: 1,
-    backgroundColor: '#1a1a1a',
     justifyContent: 'flex-end',
     paddingBottom: 100,
+    // backgroundColor set dynamically via theme
   },
   cardContent: {
     paddingHorizontal: 20,
@@ -154,10 +159,10 @@ const styles = StyleSheet.create({
   },
   searchResult: {
     flexDirection: 'row',
-    backgroundColor: '#1a1a1a',
     borderRadius: 12,
     marginBottom: 12,
     overflow: 'hidden',
+    // backgroundColor set dynamically via theme
   },
   searchContent: {
     flex: 1,
@@ -166,10 +171,10 @@ const styles = StyleSheet.create({
   },
   historyItem: {
     flexDirection: 'row',
-    backgroundColor: '#1a1a1a',
     borderRadius: 12,
     marginBottom: 12,
     overflow: 'hidden',
+    // backgroundColor set dynamically via theme
   },
   historyContent: {
     flex: 1,

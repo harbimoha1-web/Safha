@@ -12,6 +12,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { FontAwesome } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import type { Story, Language } from '@/types';
+import { HapticFeedback } from '@/lib/haptics';
+import { useTheme } from '@/contexts/ThemeContext';
 
 const { width, height } = Dimensions.get('window');
 
@@ -25,18 +27,22 @@ interface StoryCardProps {
 }
 
 export function StoryCard({ story, isActive, language, isSaved, onSave, onShare }: StoryCardProps) {
+  const { colors } = useTheme();
   const isArabic = language === 'ar';
   const title = isArabic ? story.title_ar : story.title_en;
   const summary = isArabic ? story.summary_ar : story.summary_en;
+  const whyItMatters = isArabic ? story.why_it_matters_ar : story.why_it_matters_en;
 
   const handleSave = useCallback(() => {
+    HapticFeedback.saveStory();
     onSave?.(story.id);
   }, [story.id, onSave]);
 
   const handleShare = useCallback(async () => {
+    HapticFeedback.shareStory();
     try {
       const result = await Share.share({
-        message: `${title}\n\n${summary}\n\nRead more on Teller`,
+        message: `${title}\n\n${summary}\n\nRead more on Safha`,
         url: story.original_url,
       });
       // Track share if user completed the share action
@@ -49,6 +55,7 @@ export function StoryCard({ story, isActive, language, isSaved, onSave, onShare 
   }, [title, summary, story.original_url, story.id, onShare]);
 
   const handleReadMore = useCallback(() => {
+    HapticFeedback.buttonPress();
     router.push(`/story/${story.id}`);
   }, [story.id]);
 
@@ -73,7 +80,7 @@ export function StoryCard({ story, isActive, language, isSaved, onSave, onShare 
       >
         {/* Gradient Overlay */}
         <LinearGradient
-          colors={['transparent', 'rgba(0,0,0,0.3)', 'rgba(0,0,0,0.9)']}
+          colors={colors.cardGradient}
           locations={[0, 0.5, 1]}
           style={styles.gradient}
           pointerEvents="box-none"
@@ -102,6 +109,37 @@ export function StoryCard({ story, isActive, language, isSaved, onSave, onShare 
             >
               {summary}
             </Text>
+
+            {/* Why It Matters Section - AI Enhanced Design */}
+            {whyItMatters && (
+              <LinearGradient
+                colors={['rgba(168,85,247,0.25)', 'rgba(0,122,255,0.18)']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.whyItMattersContainer}
+              >
+                <View
+                  accessible={true}
+                  accessibilityLabel={isArabic ? `لماذا يهمك: ${whyItMatters}` : `Why it matters: ${whyItMatters}`}
+                >
+                  <View style={[styles.whyItMattersHeader, isArabic && styles.whyItMattersHeaderRtl]}>
+                    <View style={styles.aiBadge}>
+                      <FontAwesome name="magic" size={10} color="#fff" />
+                      <Text style={styles.aiBadgeText}>AI</Text>
+                    </View>
+                    <Text style={[styles.whyItMattersLabel, isArabic && styles.arabicText]}>
+                      {isArabic ? 'لماذا يهمك؟' : 'Why it matters'}
+                    </Text>
+                  </View>
+                  <Text
+                    style={[styles.whyItMattersText, isArabic && styles.arabicText]}
+                    numberOfLines={2}
+                  >
+                    {whyItMatters}
+                  </Text>
+                </View>
+              </LinearGradient>
+            )}
 
             {/* Read More Button */}
             <TouchableOpacity
@@ -150,13 +188,6 @@ export function StoryCard({ story, isActive, language, isSaved, onSave, onShare 
                 {formatCount(story.share_count)}
               </Text>
             </TouchableOpacity>
-
-            <View style={styles.actionButton}>
-              <FontAwesome name="eye" size={28} color="#fff" />
-              <Text style={styles.actionCount}>
-                {formatCount(story.view_count)}
-              </Text>
-            </View>
           </View>
         </LinearGradient>
       </ImageBackground>
@@ -208,7 +239,50 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.9)',
     fontSize: 16,
     lineHeight: 24,
-    marginBottom: 20,
+    marginBottom: 12,
+  },
+  whyItMattersContainer: {
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(168,85,247,0.35)',
+  },
+  whyItMattersHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 6,
+  },
+  whyItMattersHeaderRtl: {
+    flexDirection: 'row-reverse',
+  },
+  aiBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#A855F7',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    gap: 4,
+  },
+  aiBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  whyItMattersLabel: {
+    color: '#E9D5FF', // Light purple for better contrast with gradient
+    fontSize: 12,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  whyItMattersText: {
+    color: 'rgba(255,255,255,0.95)',
+    fontSize: 14,
+    lineHeight: 20,
   },
   arabicText: {
     textAlign: 'right',

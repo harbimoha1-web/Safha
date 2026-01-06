@@ -1,5 +1,5 @@
-import { useInfiniteQuery } from '@tanstack/react-query';
-import { getStories } from '@/lib/api';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import { getStories, getStoriesByTopic } from '@/lib/api';
 import { PAGE_SIZE, STALE_TIME } from '@/constants/config';
 
 export function useStories(topicIds?: string[]) {
@@ -11,6 +11,15 @@ export function useStories(topicIds?: string[]) {
       return allPages.length * PAGE_SIZE;
     },
     initialPageParam: 0,
+    staleTime: STALE_TIME,
+  });
+}
+
+export function useStoriesByTopic(topicId: string | undefined) {
+  return useQuery({
+    queryKey: ['storiesByTopic', topicId],
+    queryFn: () => getStoriesByTopic(topicId!, 50),
+    enabled: !!topicId,
     staleTime: STALE_TIME,
   });
 }

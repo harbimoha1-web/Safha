@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useMemo } from 'react';
 import { useColorScheme } from 'react-native';
 import { useAppStore } from '@/stores';
-import { colors, lightColors } from '@/constants';
+import { colors, lightColors, premiumColors, lightPremiumColors } from '@/constants';
 import type { Theme } from '@/types';
 
 type ColorScheme = 'light' | 'dark';
@@ -11,6 +11,8 @@ interface ThemeContextValue {
   colorScheme: ColorScheme;
   // Theme colors based on resolved scheme
   colors: typeof colors;
+  // Premium colors based on resolved scheme
+  premiumColors: typeof premiumColors;
   // Whether dark mode is active
   isDark: boolean;
   // User's theme preference
@@ -35,10 +37,12 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
     const isDark = resolvedScheme === 'dark';
     const themeColors = isDark ? colors : lightColors;
+    const themePremiumColors = isDark ? premiumColors : lightPremiumColors;
 
     return {
       colorScheme: resolvedScheme,
       colors: themeColors,
+      premiumColors: themePremiumColors,
       isDark,
       themeSetting: settings.theme,
     };

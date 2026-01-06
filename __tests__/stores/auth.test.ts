@@ -175,7 +175,7 @@ describe('useAuthStore', () => {
       await useAuthStore.getState().resetPassword('test@example.com');
 
       expect(supabase.auth.resetPasswordForEmail).toHaveBeenCalledWith('test@example.com', {
-        redirectTo: 'tellerapp://reset-password',
+        redirectTo: 'safha://reset-password',
       });
     });
 
