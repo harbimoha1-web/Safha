@@ -7,7 +7,6 @@ import {
   ScrollView,
   TouchableOpacity,
   Animated,
-  RefreshControl,
 } from 'react-native';
 import PagerView from 'react-native-pager-view';
 import { FontAwesome } from '@expo/vector-icons';

@@ -8,3 +8,4 @@ export * from './useSearch';
 export * from './useViewedStories';
 export * from './useDebouncedValue';
 export * from './useTopicSourceMapping';
+export * from './useUnifiedSearch';
