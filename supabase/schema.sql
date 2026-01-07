@@ -239,14 +239,34 @@ CREATE TRIGGER on_saved_story_change
 -- ============================================
 
 INSERT INTO topics (name_ar, name_en, slug, icon, color, sort_order) VALUES
+  -- Existing core topics
   ('السياسة', 'Politics', 'politics', 'landmark', '#DC2626', 1),
   ('الاقتصاد', 'Economy', 'economy', 'chart-line', '#16A34A', 2),
-  ('الرياضة', 'Sports', 'sports', 'futbol', '#2563EB', 3),
-  ('التكنولوجيا', 'Technology', 'technology', 'microchip', '#7C3AED', 4),
-  ('الترفيه', 'Entertainment', 'entertainment', 'film', '#DB2777', 5),
-  ('الصحة', 'Health', 'health', 'heart-pulse', '#059669', 6),
-  ('العلوم', 'Science', 'science', 'flask', '#0891B2', 7),
-  ('السفر', 'Travel', 'travel', 'plane', '#F59E0B', 8)
+  ('التكنولوجيا', 'Technology', 'technology', 'microchip', '#7C3AED', 3),
+  -- New topics from user request
+  ('الطعام والمشروبات', 'Food & Drink', 'food-drink', 'cutlery', '#F97316', 4),
+  ('الجمال والأناقة', 'Beauty & Style', 'beauty-style', 'diamond', '#EC4899', 5),
+  ('الموسيقى', 'Music', 'music', 'music', '#8B5CF6', 6),
+  ('اللياقة والصحة', 'Fitness & Health', 'fitness-health', 'heartbeat', '#10B981', 7),
+  ('فلوقات', 'Vlogs', 'vlogs', 'video-camera', '#06B6D4', 8),
+  ('كوميديا', 'Comedy', 'comedy', 'smile-o', '#FBBF24', 9),
+  ('الرياضة', 'Sports', 'sports', 'futbol', '#2563EB', 10),
+  ('الثقافة الترفيهية', 'Entertainment Culture', 'entertainment-culture', 'film', '#DB2777', 11),
+  ('العلوم والتعليم', 'Science & Education', 'science-education', 'graduation-cap', '#0891B2', 12),
+  ('العائلة', 'Family', 'family', 'users', '#F472B6', 13),
+  ('التحفيز والنصائح', 'Motivation & Advice', 'motivation-advice', 'lightbulb-o', '#A855F7', 14),
+  ('الرقص', 'Dance', 'dance', 'star', '#F43F5E', 15),
+  ('السفر', 'Travel', 'travel', 'plane', '#F59E0B', 16),
+  ('الألعاب', 'Gaming', 'gaming', 'gamepad', '#6366F1', 17),
+  ('الحيوانات الأليفة', 'Pets', 'pets', 'paw', '#84CC16', 18),
+  ('السيارات والمركبات', 'Auto & Vehicle', 'auto-vehicle', 'car', '#EF4444', 19),
+  ('افعلها بنفسك', 'DIY', 'diy', 'wrench', '#78716C', 20),
+  ('الفن', 'Art', 'art', 'paint-brush', '#D946EF', 21),
+  ('الأنمي والقصص المصورة', 'Anime & Comics', 'anime-comics', 'book', '#FB7185', 22),
+  ('حيل الحياة', 'Life Hacks', 'life-hacks', 'magic', '#14B8A6', 23),
+  ('الطبيعة', 'Outdoors', 'outdoors', 'tree', '#22C55E', 24),
+  ('مرضي بشكل غريب', 'Oddly Satisfying', 'oddly-satisfying', 'eye', '#7C3AED', 25),
+  ('المنزل والحديقة', 'Home & Garden', 'home-garden', 'home', '#059669', 26)
 ON CONFLICT (slug) DO NOTHING;
 
 -- ============================================

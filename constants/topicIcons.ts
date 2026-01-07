@@ -17,20 +17,56 @@ export type TopicIconName =
   | 'car'
   | 'cutlery'
   | 'home'
-  | 'music';
+  | 'music'
+  | 'diamond'
+  | 'video-camera'
+  | 'smile-o'
+  | 'users'
+  | 'lightbulb-o'
+  | 'star'
+  | 'gamepad'
+  | 'paw'
+  | 'wrench'
+  | 'paint-brush'
+  | 'book'
+  | 'magic'
+  | 'tree'
+  | 'eye';
 
 // Map topic slugs to FontAwesome icon names
 export const TOPIC_ICONS: Record<string, TopicIconName> = {
   // Core topics
   politics: 'university',
   economy: 'line-chart',
-  sports: 'futbol-o',
   technology: 'laptop',
+  // New topics
+  'food-drink': 'cutlery',
+  'beauty-style': 'diamond',
+  music: 'music',
+  'fitness-health': 'heartbeat',
+  vlogs: 'video-camera',
+  comedy: 'smile-o',
+  sports: 'futbol-o',
+  'entertainment-culture': 'film',
+  'science-education': 'graduation-cap',
+  family: 'users',
+  'motivation-advice': 'lightbulb-o',
+  dance: 'star',
+  travel: 'plane',
+  gaming: 'gamepad',
+  pets: 'paw',
+  'auto-vehicle': 'car',
+  diy: 'wrench',
+  art: 'paint-brush',
+  'anime-comics': 'book',
+  'life-hacks': 'magic',
+  outdoors: 'tree',
+  'oddly-satisfying': 'eye',
+  'home-garden': 'home',
+  // Legacy mappings for backwards compatibility
   entertainment: 'film',
   health: 'heartbeat',
   science: 'flask',
-  travel: 'plane',
-  // Additional topics
   news: 'newspaper-o',
   world: 'globe',
   education: 'graduation-cap',
@@ -38,7 +74,6 @@ export const TOPIC_ICONS: Record<string, TopicIconName> = {
   automotive: 'car',
   food: 'cutlery',
   lifestyle: 'home',
-  music: 'music',
 };
 
 // Get icon name for a topic, with fallback
@@ -48,14 +83,38 @@ export function getTopicIcon(slug: string): TopicIconName {
 
 // Topic colors (consistent with database)
 export const TOPIC_COLORS: Record<string, string> = {
-  politics: '#FF6B6B',
-  economy: '#4ECDC4',
-  sports: '#45B7D1',
-  technology: '#96CEB4',
+  // Core topics
+  politics: '#DC2626',
+  economy: '#16A34A',
+  technology: '#7C3AED',
+  // New topics
+  'food-drink': '#F97316',
+  'beauty-style': '#EC4899',
+  music: '#8B5CF6',
+  'fitness-health': '#10B981',
+  vlogs: '#06B6D4',
+  comedy: '#FBBF24',
+  sports: '#2563EB',
+  'entertainment-culture': '#DB2777',
+  'science-education': '#0891B2',
+  family: '#F472B6',
+  'motivation-advice': '#A855F7',
+  dance: '#F43F5E',
+  travel: '#F59E0B',
+  gaming: '#6366F1',
+  pets: '#84CC16',
+  'auto-vehicle': '#EF4444',
+  diy: '#78716C',
+  art: '#D946EF',
+  'anime-comics': '#FB7185',
+  'life-hacks': '#14B8A6',
+  outdoors: '#22C55E',
+  'oddly-satisfying': '#7C3AED',
+  'home-garden': '#059669',
+  // Legacy mappings for backwards compatibility
   entertainment: '#FFEAA7',
   health: '#DDA0DD',
   science: '#98D8C8',
-  travel: '#F7DC6F',
   news: '#A8A8A8',
   world: '#5DADE2',
   education: '#AF7AC5',
@@ -63,7 +122,6 @@ export const TOPIC_COLORS: Record<string, string> = {
   automotive: '#EB984E',
   food: '#F5B041',
   lifestyle: '#EC7063',
-  music: '#BB8FCE',
 };
 
 // Get color for a topic, with fallback

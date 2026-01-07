@@ -43,14 +43,38 @@ interface SummaryState {
 
 // Topic labels for categorization
 const TOPIC_LABELS: Record<string, { en: string; ar: string }> = {
+  // Core topics
   politics: { en: 'Politics', ar: 'السياسة' },
   economy: { en: 'Economy', ar: 'الاقتصاد' },
   technology: { en: 'Technology', ar: 'التكنولوجيا' },
+  // New topics
+  'food-drink': { en: 'Food & Drink', ar: 'الطعام والمشروبات' },
+  'beauty-style': { en: 'Beauty & Style', ar: 'الجمال والأناقة' },
+  music: { en: 'Music', ar: 'الموسيقى' },
+  'fitness-health': { en: 'Fitness & Health', ar: 'اللياقة والصحة' },
+  vlogs: { en: 'Vlogs', ar: 'فلوقات' },
+  comedy: { en: 'Comedy', ar: 'كوميديا' },
   sports: { en: 'Sports', ar: 'الرياضة' },
+  'entertainment-culture': { en: 'Entertainment Culture', ar: 'الثقافة الترفيهية' },
+  'science-education': { en: 'Science & Education', ar: 'العلوم والتعليم' },
+  family: { en: 'Family', ar: 'العائلة' },
+  'motivation-advice': { en: 'Motivation & Advice', ar: 'التحفيز والنصائح' },
+  dance: { en: 'Dance', ar: 'الرقص' },
+  travel: { en: 'Travel', ar: 'السفر' },
+  gaming: { en: 'Gaming', ar: 'الألعاب' },
+  pets: { en: 'Pets', ar: 'الحيوانات الأليفة' },
+  'auto-vehicle': { en: 'Auto & Vehicle', ar: 'السيارات والمركبات' },
+  diy: { en: 'DIY', ar: 'افعلها بنفسك' },
+  art: { en: 'Art', ar: 'الفن' },
+  'anime-comics': { en: 'Anime & Comics', ar: 'الأنمي والقصص المصورة' },
+  'life-hacks': { en: 'Life Hacks', ar: 'حيل الحياة' },
+  outdoors: { en: 'Outdoors', ar: 'الطبيعة' },
+  'oddly-satisfying': { en: 'Oddly Satisfying', ar: 'مرضي بشكل غريب' },
+  'home-garden': { en: 'Home & Garden', ar: 'المنزل والحديقة' },
+  // Legacy mappings
   health: { en: 'Health', ar: 'الصحة' },
   entertainment: { en: 'Entertainment', ar: 'الترفيه' },
   science: { en: 'Science', ar: 'العلوم' },
-  travel: { en: 'Travel', ar: 'السفر' },
   general: { en: 'Today\'s Headlines', ar: 'عناوين اليوم' },
 };
 
