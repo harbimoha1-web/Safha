@@ -117,6 +117,26 @@ export function HistoryItemSkeleton() {
   );
 }
 
+export function TopicCardSkeleton() {
+  const { colors } = useTheme();
+  return (
+    <View style={[styles.topicCard, { backgroundColor: colors.surface }]}>
+      <Skeleton width={32} height={32} borderRadius={16} />
+      <Skeleton width={70} height={14} style={{ marginTop: 8 }} />
+    </View>
+  );
+}
+
+export function TopicGridSkeleton({ count = 8 }: { count?: number }) {
+  return (
+    <View style={styles.topicGrid}>
+      {Array.from({ length: count }).map((_, i) => (
+        <TopicCardSkeleton key={i} />
+      ))}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   skeleton: {
     // backgroundColor set dynamically via theme
@@ -180,5 +200,18 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 12,
     justifyContent: 'center',
+  },
+  topicCard: {
+    width: '47%',
+    aspectRatio: 1.5,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  topicGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: 16,
+    gap: 12,
   },
 });

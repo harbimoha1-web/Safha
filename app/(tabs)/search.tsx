@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -9,20 +9,22 @@ import {
   Image,
   ScrollView,
 } from 'react-native';
-import { SearchResultSkeleton } from '@/components/SkeletonLoader';
+import { SearchResultSkeleton, TopicGridSkeleton } from '@/components/SkeletonLoader';
+import { TopicAccordion } from '@/components/sources';
 import { FontAwesome } from '@expo/vector-icons';
 import { router, Href } from 'expo-router';
 import { useAppStore } from '@/stores';
-import { useTopics, useSearch, useDebouncedValue } from '@/hooks';
+import { useTopics, useSources, useSearch, useDebouncedValue, useTopicSourceMapping } from '@/hooks';
 import { useTheme } from '@/contexts/ThemeContext';
 import { SEARCH_DEBOUNCE_MS } from '@/constants/config';
 import { spacing, fontSize, fontWeight, borderRadius } from '@/constants/theme';
-import { getTopicIcon } from '@/constants/topicIcons';
-import type { Story } from '@/types';
+import type { Story, LanguageFilter, Source } from '@/types';
 
 export default function SearchScreen() {
   const [query, setQuery] = useState('');
-  const { settings, recentSearches, addRecentSearch, clearRecentSearches } = useAppStore();
+  const [expandedTopicId, setExpandedTopicId] = useState<string | null>(null);
+  const [languageFilter, setLanguageFilter] = useState<LanguageFilter>('all');
+  const { settings, addRecentSearch, deselectedSources, toggleSourceSelection, selectAllVisibleSources } = useAppStore();
   const { colors } = useTheme();
 
   const isArabic = settings.language === 'ar';
@@ -31,8 +33,31 @@ export default function SearchScreen() {
   const debouncedQuery = useDebouncedValue(query, SEARCH_DEBOUNCE_MS);
 
   // React Query hooks
-  const { data: topics = [] } = useTopics();
+  const { data: topics = [], isLoading: isLoadingTopics } = useTopics();
+  const { data: sources = [], isLoading: isLoadingSources } = useSources();
   const { data: results = [], isLoading: isSearching } = useSearch(debouncedQuery);
+  const { data: topicSourceMapping = [] } = useTopicSourceMapping();
+
+  // Create a map of topic ID -> sources
+  const topicSourcesMap = useMemo(() => {
+    const map = new Map<string, Source[]>();
+
+    if (topicSourceMapping.length > 0) {
+      topicSourceMapping.forEach((mapping) => {
+        const topicSources = sources.filter((s) =>
+          mapping.source_ids.includes(s.id)
+        );
+        map.set(mapping.topic_id, topicSources);
+      });
+    } else {
+      // Fallback: show all sources under each topic (for development)
+      topics.forEach((topic) => {
+        map.set(topic.id, sources);
+      });
+    }
+
+    return map;
+  }, [topics, sources, topicSourceMapping]);
 
   // Track last saved search to avoid duplicates
   const lastSavedSearch = useRef<string>('');
@@ -49,14 +74,13 @@ export default function SearchScreen() {
     setQuery(text);
   }, []);
 
-  const handleTopicPress = (topic: typeof topics[0]) => {
-    // Navigate to topic detail page
-    router.push(`/topic/${topic.id}` as Href);
-  };
-
   const handleStoryPress = (storyId: string) => {
     router.push(`/story/${storyId}`);
   };
+
+  const handleToggleExpand = useCallback((topicId: string) => {
+    setExpandedTopicId((prev) => (prev === topicId ? null : topicId));
+  }, []);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -66,13 +90,13 @@ export default function SearchScreen() {
           <FontAwesome name="search" size={18} color={colors.textMuted} />
           <TextInput
             style={[styles.searchInput, { color: colors.textPrimary }, isArabic && styles.arabicText]}
-            placeholder={isArabic ? 'ابحث عن الأخبار...' : 'Search news...'}
+            placeholder={isArabic ? 'ابحث في اهتماماتك...' : 'Search your interests...'}
             placeholderTextColor={colors.textMuted}
             value={query}
             onChangeText={handleSearch}
             autoCapitalize="none"
             returnKeyType="search"
-            accessibilityLabel={isArabic ? 'بحث في الأخبار' : 'Search news'}
+            accessibilityLabel={isArabic ? 'بحث في اهتماماتك' : 'Search your interests'}
           />
           {query.length > 0 && (
             <TouchableOpacity
@@ -136,40 +160,6 @@ export default function SearchScreen() {
         />
       ) : (
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-          {/* Recent Searches */}
-          {recentSearches.length > 0 && (
-            <>
-              <View style={styles.sectionHeader}>
-                <Text style={[styles.sectionTitle, { color: colors.textPrimary }, isArabic && styles.arabicText]}>
-                  {isArabic ? 'عمليات البحث الأخيرة' : 'Recent Searches'}
-                </Text>
-                <TouchableOpacity
-                  onPress={clearRecentSearches}
-                  accessibilityRole="button"
-                  accessibilityLabel={isArabic ? 'مسح البحث الأخير' : 'Clear recent searches'}
-                >
-                  <Text style={[styles.clearButton, { color: colors.primary }]}>
-                    {isArabic ? 'مسح' : 'Clear'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-              <View style={styles.recentSearches}>
-                {recentSearches.map((search, index) => (
-                  <TouchableOpacity
-                    key={index}
-                    style={[styles.recentSearchItem, { borderBottomColor: colors.border }]}
-                    onPress={() => handleSearch(search)}
-                    accessibilityRole="button"
-                    accessibilityLabel={search}
-                  >
-                    <FontAwesome name="history" size={14} color={colors.textMuted} />
-                    <Text style={[styles.recentSearchText, { color: colors.textPrimary }]}>{search}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </>
-          )}
-
           {/* Manage Interests Card */}
           <TouchableOpacity
             style={[styles.interestsCard, { backgroundColor: colors.primary }]}
@@ -186,33 +176,38 @@ export default function SearchScreen() {
                   {isArabic ? 'إدارة اهتماماتك' : 'Manage Your Interests'}
                 </Text>
                 <Text style={[styles.interestsCardSubtitle, isArabic && styles.arabicText]}>
-                  {isArabic ? 'خصص تجربتك الإخبارية' : 'Personalize your news feed'}
+                  {isArabic ? 'خصص المواضيع التي تتابعها' : 'Customize the topics you follow'}
                 </Text>
               </View>
             </View>
             <FontAwesome name={isArabic ? 'chevron-left' : 'chevron-right'} size={16} color="rgba(255,255,255,0.7)" />
           </TouchableOpacity>
 
-          {/* Explore Topics */}
+          {/* Topics Section Title */}
           <Text style={[styles.sectionTitle, { color: colors.textPrimary }, isArabic && styles.arabicText]}>
             {isArabic ? 'استكشف المواضيع' : 'Explore Topics'}
           </Text>
-          <View style={styles.topicsGrid}>
-            {topics.map((topic) => (
-              <TouchableOpacity
+
+          {/* Topics with Expandable Sources */}
+          {isLoadingTopics ? (
+            <TopicGridSkeleton count={6} />
+          ) : (
+            topics.map((topic) => (
+              <TopicAccordion
                 key={topic.id}
-                style={[styles.topicCard, { backgroundColor: topic.color || colors.surfaceLight }]}
-                onPress={() => handleTopicPress(topic)}
-                accessibilityRole="button"
-                accessibilityLabel={isArabic ? topic.name_ar : topic.name_en}
-              >
-                <FontAwesome name={getTopicIcon(topic.slug)} size={24} color={colors.white} />
-                <Text style={[styles.topicName, { color: colors.white }]}>
-                  {isArabic ? topic.name_ar : topic.name_en}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+                topic={topic}
+                sources={topicSourcesMap.get(topic.id) || []}
+                isExpanded={expandedTopicId === topic.id}
+                onToggleExpand={() => handleToggleExpand(topic.id)}
+                languageFilter={languageFilter}
+                onLanguageFilterChange={setLanguageFilter}
+                deselectedSources={deselectedSources}
+                onToggleSource={toggleSourceSelection}
+                onSelectAll={selectAllVisibleSources}
+                isArabic={isArabic}
+              />
+            ))
+          )}
         </ScrollView>
       )}
     </View>
@@ -383,5 +378,55 @@ const styles = StyleSheet.create({
   },
   resultMeta: {
     fontSize: fontSize.xs,
+  },
+  searchTabs: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginBottom: spacing.lg,
+  },
+  searchTab: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: 20,
+  },
+  searchTabText: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.medium,
+  },
+  sourcesList: {
+    gap: spacing.sm,
+  },
+  sourceCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    gap: spacing.md,
+  },
+  sourceLogo: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+  },
+  sourceLogoPlaceholder: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  sourceInfo: {
+    flex: 1,
+  },
+  sourceName: {
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.semibold,
+  },
+  sourceLanguage: {
+    fontSize: fontSize.xs,
+    marginTop: 2,
   },
 });

@@ -9,12 +9,14 @@ beforeEach(() => {
       theme: 'system',
       textSize: 'medium',
       autoPlayVideos: true,
+      newsFrequency: null,
     },
     selectedTopics: [],
     availableTopics: [],
     recentSearches: [],
     isOnboarded: false,
     currentStoryIndex: 0,
+    activeFilters: [],
   });
 });
 

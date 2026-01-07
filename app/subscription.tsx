@@ -34,15 +34,24 @@ import {
 
 // Value stack items
 const VALUE_ITEMS = [
-  { icon: 'magic', textEn: 'Your news, summarized daily', textAr: 'أخبارك ملخصة كل يوم', value: 20 },
-  { icon: 'whatsapp', textEn: 'Weekly digest to WhatsApp', textAr: 'ملخص أسبوعي على واتسابك', value: 10 },
-  { icon: 'ban', textEn: 'Zero ads. Pure news.', textAr: 'بدون إعلانات. أخبار فقط.', value: 10 },
-  { icon: 'bolt', textEn: 'AI learns what you care about', textAr: 'الذكاء الاصطناعي يتعلم اهتماماتك', value: 10 },
+  { icon: 'magic', textEn: 'All your interests, summarized daily', textAr: 'كل اهتماماتك، ملخصة يومياً', value: 20 },
+  { icon: 'shield', textEn: 'Trusted sources only, no noise', textAr: 'مصادر موثوقة فقط، بدون ضوضاء', value: 10 },
+  { icon: 'ban', textEn: 'Zero ads. Pure content.', textAr: 'بدون إعلانات. محتوى فقط.', value: 10 },
+  { icon: 'bolt', textEn: 'AI curates what matters to you', textAr: 'الذكاء الاصطناعي ينظم ما يهمك', value: 10 },
 ];
 
 export default function SubscriptionScreen() {
   const { settings } = useAppStore();
-  const { subscription, isPremium, initiatePayment, confirmPayment, subscribe } = useSubscriptionStore();
+  const {
+    subscription,
+    isPremium,
+    initiatePayment,
+    confirmPayment,
+    subscribe,
+    getValidIntent,
+    clearSubscriptionIntent,
+    setSubscriptionIntent,
+  } = useSubscriptionStore();
   const { user } = useAuthStore();
   const { colors } = useTheme();
   const isArabic = settings.language === 'ar';
@@ -51,6 +60,7 @@ export default function SubscriptionScreen() {
   const [selectedPlan, setSelectedPlan] = useState<PlanType>('premium');
   const [isLoading, setIsLoading] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
+  const [hasAutoInitiated, setHasAutoInitiated] = useState(false);
 
   // Animation values - start at 1 (fully visible) for instant display
   const trialBannerAnim = useRef(new Animated.Value(1)).current;
@@ -76,17 +86,75 @@ export default function SubscriptionScreen() {
     }
   }, [params.status]);
 
+  // Auto-initiate payment when returning from login with pending intent
+  useEffect(() => {
+    const intent = getValidIntent();
+    if (intent && user && !hasAutoInitiated && !isPremium && !showCelebration && !isLoading) {
+      setHasAutoInitiated(true);
+      setSelectedPlan(intent.plan);
+      clearSubscriptionIntent();
+
+      // Auto-initiate payment after short delay for UI to settle
+      setTimeout(() => {
+        handleSubscribeWithPlan(intent.plan);
+      }, 300);
+    }
+  }, [user, isPremium, showCelebration, isLoading, hasAutoInitiated]);
+
+  // Helper for auto-initiate with specific plan
+  const handleSubscribeWithPlan = async (plan: PlanType) => {
+    setIsLoading(true);
+    HapticFeedback.buttonPress();
+
+    try {
+      const result = await initiatePayment(plan);
+
+      if (!result.success) {
+        throw new Error(result.error || 'Payment initiation failed');
+      }
+
+      if (result.paymentUrl) {
+        const browserResult = await WebBrowser.openBrowserAsync(result.paymentUrl, {
+          presentationStyle: WebBrowser.WebBrowserPresentationStyle.FULL_SCREEN,
+          dismissButtonStyle: 'cancel',
+        });
+
+        if (browserResult.type === 'cancel') {
+          Alert.alert(
+            isArabic ? 'تم الإلغاء' : 'Cancelled',
+            isArabic ? 'تم إلغاء عملية الدفع.' : 'Payment was cancelled.'
+          );
+        } else {
+          await confirmPayment();
+          const { isPremium: nowPremium } = useSubscriptionStore.getState();
+          if (nowPremium) {
+            setShowCelebration(true);
+          }
+        }
+      } else {
+        await subscribe(plan);
+        setShowCelebration(true);
+      }
+    } catch (error) {
+      console.error('Subscription error:', error);
+      Alert.alert(
+        isArabic ? 'خطأ' : 'Error',
+        isArabic ? 'حدث خطأ أثناء الاشتراك. حاول مرة أخرى.' : 'An error occurred. Please try again.'
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleSubscribe = async () => {
     setIsLoading(true);
     HapticFeedback.buttonPress();
 
-    // Check if user is logged in - redirect to login with returnTo
+    // Check if user is logged in - store intent and redirect to login
     if (!user) {
       setIsLoading(false);
-      router.push({
-        pathname: '/(auth)/login',
-        params: { returnTo: '/subscription' }
-      });
+      setSubscriptionIntent(selectedPlan, 'paywall');
+      router.push('/(auth)/login');
       return;
     }
 

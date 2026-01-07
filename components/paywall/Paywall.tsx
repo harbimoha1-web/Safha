@@ -47,22 +47,22 @@ export function Paywall({ feature, featureAr, onClose }: PaywallProps) {
         <View style={styles.benefits}>
           <BenefitItem
             icon="check"
-            text={isArabic ? 'مواضيع غير محدودة' : 'Unlimited topics'}
+            text={isArabic ? 'كل المواضيع التي تهمك' : 'All topics you care about'}
             isArabic={isArabic}
           />
           <BenefitItem
             icon="check"
-            text={isArabic ? 'ملخص يومي' : 'Daily digest'}
+            text={isArabic ? 'مصادر موثوقة فقط' : 'Trusted sources only'}
             isArabic={isArabic}
           />
           <BenefitItem
             icon="check"
-            text={isArabic ? 'ملخص أسبوعي عبر واتساب' : 'Weekly WhatsApp digest'}
+            text={isArabic ? 'ملخص يومي مخصص' : 'Personalized daily digest'}
             isArabic={isArabic}
           />
           <BenefitItem
             icon="check"
-            text={isArabic ? 'بدون إعلانات' : 'No ads'}
+            text={isArabic ? 'تجربة بدون إعلانات' : 'Ad-free experience'}
             isArabic={isArabic}
           />
         </View>

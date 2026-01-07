@@ -14,7 +14,8 @@
       "Bash(npm test:*)",
       "WebFetch(domain:www.notion.so)",
       "Bash(npx expo start:*)",
-      "Bash(timeout:*)"
+      "Bash(timeout:*)",
+      "Skill(thebolds)"
     ]
   }
 }

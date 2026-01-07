@@ -3,6 +3,7 @@
     "name": "Safha",
     "slug": "safha",
     "version": "1.0.0",
+    "description": "Safha organizes all your interests from trusted sources. More than news - tech, sports, lifestyle, and everything you care about, summarized by AI.",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "safha",

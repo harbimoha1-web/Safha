@@ -15,6 +15,7 @@ import { router } from 'expo-router';
 import { useAppStore } from '@/stores';
 import { useTheme } from '@/contexts/ThemeContext';
 import { spacing, borderRadius, fontSize, fontWeight } from '@/constants/theme';
+import type { NewsFrequency } from '@/types';
 
 type SurveyStep = 'welcome' | 'frequency' | 'offer';
 
@@ -26,12 +27,16 @@ const FREQUENCY_OPTIONS = [
 
 export default function WelcomeSurveyScreen() {
   const [step, setStep] = useState<SurveyStep>('welcome');
-  const [selectedFrequency, setSelectedFrequency] = useState<string | null>(null);
-  const { settings, setSurveyCompleted } = useAppStore();
+  const [selectedFrequency, setSelectedFrequency] = useState<NewsFrequency>(null);
+  const { settings, setSurveyCompleted, setNewsFrequency } = useAppStore();
   const { colors } = useTheme();
   const isArabic = settings.language === 'ar';
 
   const handleComplete = (showSubscription: boolean) => {
+    // Save the frequency preference to persistent store
+    if (selectedFrequency) {
+      setNewsFrequency(selectedFrequency);
+    }
     setSurveyCompleted(true);
     if (showSubscription) {
       router.replace('/subscription');
@@ -41,6 +46,10 @@ export default function WelcomeSurveyScreen() {
   };
 
   const handleSkip = () => {
+    // Save frequency even on skip if selected
+    if (selectedFrequency) {
+      setNewsFrequency(selectedFrequency);
+    }
     setSurveyCompleted(true);
     router.replace('/(auth)/onboarding');
   };
@@ -53,7 +62,7 @@ export default function WelcomeSurveyScreen() {
           <View style={styles.header}>
             <Text style={[styles.logo, { color: colors.textPrimary }]}>صفحة</Text>
             <Text style={[styles.tagline, { color: colors.textSecondary }]}>
-              {isArabic ? 'أخبارك. مُلخَّصة. ذكية.' : 'Your news. Summarized. Smart.'}
+              {isArabic ? 'اهتماماتك. منظمة. من مصادر موثوقة.' : 'Your interests. Organized. Trusted.'}
             </Text>
           </View>
 
@@ -67,21 +76,21 @@ export default function WelcomeSurveyScreen() {
                   {isArabic ? 'ملخصات ذكية' : 'Smart Summaries'}
                 </Text>
                 <Text style={[styles.valueDesc, { color: colors.textSecondary }]}>
-                  {isArabic ? 'الذكاء الاصطناعي يلخص لك الأخبار' : 'AI summarizes news for you'}
+                  {isArabic ? 'الذكاء الاصطناعي يلخص كل ما تتابعه' : 'AI summarizes everything you follow'}
                 </Text>
               </View>
             </View>
 
             <View style={[styles.valueProp, { backgroundColor: colors.surface }]}>
               <View style={[styles.valueIcon, { backgroundColor: colors.primaryLight }]}>
-                <FontAwesome name="clock-o" size={24} color={colors.primary} />
+                <FontAwesome name="shield" size={24} color={colors.primary} />
               </View>
               <View style={styles.valueText}>
                 <Text style={[styles.valueTitle, { color: colors.textPrimary }]}>
-                  {isArabic ? 'وفّر وقتك' : 'Save Time'}
+                  {isArabic ? 'مصادر موثوقة' : 'Trusted Sources'}
                 </Text>
                 <Text style={[styles.valueDesc, { color: colors.textSecondary }]}>
-                  {isArabic ? '5 دقائق تكفيك للمعرفة' : '5 minutes to stay informed'}
+                  {isArabic ? 'محتوى مميز فقط، بدون ضوضاء' : 'Only quality content, no noise'}
                 </Text>
               </View>
             </View>
@@ -92,10 +101,10 @@ export default function WelcomeSurveyScreen() {
               </View>
               <View style={styles.valueText}>
                 <Text style={[styles.valueTitle, { color: colors.textPrimary }]}>
-                  {isArabic ? 'حسب اهتماماتك' : 'Personalized'}
+                  {isArabic ? 'أكثر من أخبار' : 'Beyond News'}
                 </Text>
                 <Text style={[styles.valueDesc, { color: colors.textSecondary }]}>
-                  {isArabic ? 'أخبار تهمك أنت' : 'News that matters to you'}
+                  {isArabic ? 'تقنية، رياضة، أسلوب حياة، والمزيد' : 'Tech, sports, lifestyle, and more'}
                 </Text>
               </View>
             </View>
@@ -131,7 +140,7 @@ export default function WelcomeSurveyScreen() {
 
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           <Text style={[styles.questionTitle, { color: colors.textPrimary }, isArabic && styles.arabicText]}>
-            {isArabic ? 'كم مرة تريد متابعة الأخبار؟' : 'How often do you want to follow news?'}
+            {isArabic ? 'كم مرة تريد متابعة اهتماماتك؟' : 'How often do you want to follow your interests?'}
           </Text>
           <Text style={[styles.questionSubtitle, { color: colors.textSecondary }, isArabic && styles.arabicText]}>
             {isArabic ? 'نخصص تجربتك بناءً على تفضيلاتك' : "We'll personalize your experience"}
@@ -146,7 +155,7 @@ export default function WelcomeSurveyScreen() {
                   { backgroundColor: colors.surface, borderColor: colors.border },
                   selectedFrequency === option.id && { borderColor: colors.primary, backgroundColor: colors.primaryLight },
                 ]}
-                onPress={() => setSelectedFrequency(option.id)}
+                onPress={() => setSelectedFrequency(option.id as NewsFrequency)}
               >
                 <FontAwesome
                   name={option.icon as any}

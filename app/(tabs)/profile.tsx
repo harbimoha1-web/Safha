@@ -17,6 +17,7 @@ import { FontAwesome } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useAppStore, useAuthStore, useSubscriptionStore, useGamificationStore } from '@/stores';
 import { updateProfile } from '@/lib/api';
+import { useBlockedSources, useUnblockSource } from '@/hooks';
 import { colors as staticColors, spacing, borderRadius, fontSize, fontWeight } from '@/constants';
 import { useTheme } from '@/contexts/ThemeContext';
 
@@ -29,9 +30,14 @@ export default function ProfileScreen() {
 
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [notificationModalVisible, setNotificationModalVisible] = useState(false);
+  const [hiddenSourcesModalVisible, setHiddenSourcesModalVisible] = useState(false);
   const [editName, setEditName] = useState(profile?.full_name || '');
   const [editUsername, setEditUsername] = useState(profile?.username || '');
   const [isSaving, setIsSaving] = useState(false);
+
+  // Blocked sources
+  const { data: blockedSources } = useBlockedSources();
+  const unblockSourceMutation = useUnblockSource();
 
   // Notification settings state
   const [notifSettings, setNotifSettings] = useState({
@@ -102,6 +108,33 @@ export default function ProfileScreen() {
 
   const toggleLanguage = () => {
     setLanguage(isArabic ? 'en' : 'ar');
+  };
+
+  const handleUnblockSource = (sourceId: string, sourceName: string) => {
+    Alert.alert(
+      isArabic ? 'إظهار المصدر' : 'Unhide Source',
+      isArabic
+        ? `هل تريد إظهار منشورات ${sourceName}؟`
+        : `Show posts from ${sourceName} again?`,
+      [
+        { text: isArabic ? 'إلغاء' : 'Cancel', style: 'cancel' },
+        {
+          text: isArabic ? 'إظهار' : 'Unhide',
+          onPress: () => {
+            unblockSourceMutation.mutate(sourceId, {
+              onSuccess: () => {
+                Alert.alert(
+                  isArabic ? 'تم' : 'Done',
+                  isArabic
+                    ? `تم إظهار منشورات ${sourceName}`
+                    : `Now showing posts from ${sourceName}`
+                );
+              },
+            });
+          },
+        },
+      ]
+    );
   };
 
   const handleContactSupport = async () => {
@@ -411,6 +444,12 @@ export default function ProfileScreen() {
             onPress={() => router.push('/(auth)/onboarding')}
           />
           <SettingsItem
+            icon="eye-slash"
+            title={isArabic ? 'المصادر المخفية' : 'Hidden Sources'}
+            value={blockedSources?.length ? `${blockedSources.length}` : undefined}
+            onPress={() => setHiddenSourcesModalVisible(true)}
+          />
+          <SettingsItem
             icon="history"
             title={isArabic ? 'سجل القراءة' : 'Reading History'}
             onPress={() => router.push('/(tabs)/library')}
@@ -577,7 +616,7 @@ export default function ProfileScreen() {
                     {isArabic ? 'ملخص يومي' : 'Daily Digest'}
                   </Text>
                   <Text style={[styles.notifDesc, { color: colors.textSecondary }]}>
-                    {isArabic ? 'أهم أخبار اليوم كل صباح' : 'Top stories every morning'}
+                    {isArabic ? 'أهم ما يهمك كل صباح' : 'Top picks for you every morning'}
                   </Text>
                 </View>
                 <View style={styles.notifRight}>
@@ -608,7 +647,7 @@ export default function ProfileScreen() {
                     {isArabic ? 'أخبار عاجلة' : 'Breaking News'}
                   </Text>
                   <Text style={[styles.notifDesc, { color: colors.textSecondary }]}>
-                    {isArabic ? 'تنبيهات فورية للأخبار المهمة' : 'Instant alerts for important news'}
+                    {isArabic ? 'تنبيهات فورية للأحداث المهمة' : 'Instant alerts for important updates'}
                   </Text>
                 </View>
                 <Switch
@@ -640,6 +679,79 @@ export default function ProfileScreen() {
             <TouchableOpacity
               style={[styles.saveButton, { backgroundColor: colors.primary }]}
               onPress={() => setNotificationModalVisible(false)}
+            >
+              <Text style={styles.saveButtonText}>
+                {isArabic ? 'تم' : 'Done'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Hidden Sources Modal */}
+      <Modal
+        visible={hiddenSourcesModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setHiddenSourcesModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: colors.surface, maxHeight: '70%' }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>
+                {isArabic ? 'المصادر المخفية' : 'Hidden Sources'}
+              </Text>
+              <TouchableOpacity
+                onPress={() => setHiddenSourcesModalVisible(false)}
+                accessibilityRole="button"
+                accessibilityLabel={isArabic ? 'إغلاق' : 'Close'}
+              >
+                <FontAwesome name="times" size={24} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            {blockedSources && blockedSources.length > 0 ? (
+              <ScrollView style={styles.hiddenSourcesList}>
+                {blockedSources.map((blocked) => (
+                  <View
+                    key={blocked.id}
+                    style={[styles.hiddenSourceItem, { backgroundColor: colors.background }]}
+                  >
+                    <View style={styles.hiddenSourceInfo}>
+                      <FontAwesome name="newspaper-o" size={20} color={colors.textSecondary} />
+                      <Text style={[styles.hiddenSourceName, { color: colors.textPrimary }]}>
+                        {blocked.source?.name || (isArabic ? 'مصدر غير معروف' : 'Unknown source')}
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      onPress={() => handleUnblockSource(blocked.source_id, blocked.source?.name || '')}
+                      accessibilityRole="button"
+                      accessibilityLabel={isArabic ? 'إظهار' : 'Unhide'}
+                    >
+                      <Text style={[styles.unhideText, { color: colors.primary }]}>
+                        {isArabic ? 'إظهار' : 'Unhide'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </ScrollView>
+            ) : (
+              <View style={styles.emptyHiddenSources}>
+                <FontAwesome name="check-circle" size={48} color={colors.success} />
+                <Text style={[styles.emptyHiddenText, { color: colors.textSecondary }]}>
+                  {isArabic ? 'لا توجد مصادر مخفية' : 'No hidden sources'}
+                </Text>
+                <Text style={[styles.emptyHiddenSubtext, { color: colors.textMuted }]}>
+                  {isArabic
+                    ? 'يمكنك إخفاء المصادر من القائمة في صفحة الأخبار'
+                    : 'You can hide sources from the menu on story cards'}
+                </Text>
+              </View>
+            )}
+
+            <TouchableOpacity
+              style={[styles.saveButton, { backgroundColor: colors.primary }]}
+              onPress={() => setHiddenSourcesModalVisible(false)}
             >
               <Text style={styles.saveButtonText}>
                 {isArabic ? 'تم' : 'Done'}
@@ -921,5 +1033,46 @@ const styles = StyleSheet.create({
   statLabel: {
     fontSize: fontSize.xs,
     marginTop: 2,
+  },
+  hiddenSourcesList: {
+    maxHeight: 300,
+  },
+  hiddenSourceItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderRadius: borderRadius.md,
+    padding: spacing.lg,
+    marginBottom: spacing.sm,
+  },
+  hiddenSourceInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    flex: 1,
+  },
+  hiddenSourceName: {
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.medium,
+    flex: 1,
+  },
+  unhideText: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.semibold,
+  },
+  emptyHiddenSources: {
+    alignItems: 'center',
+    paddingVertical: spacing.xxxl,
+  },
+  emptyHiddenText: {
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.medium,
+    marginTop: spacing.lg,
+  },
+  emptyHiddenSubtext: {
+    fontSize: fontSize.sm,
+    textAlign: 'center',
+    marginTop: spacing.sm,
+    paddingHorizontal: spacing.lg,
   },
 });

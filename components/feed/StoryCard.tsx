@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -14,6 +14,7 @@ import { router } from 'expo-router';
 import type { Story, Language } from '@/types';
 import { HapticFeedback } from '@/lib/haptics';
 import { useTheme } from '@/contexts/ThemeContext';
+import { ActionSheet, ActionSheetOption } from '@/components/ActionSheet';
 
 const { width, height } = Dimensions.get('window');
 
@@ -24,14 +25,16 @@ interface StoryCardProps {
   isSaved?: boolean;
   onSave?: (storyId: string) => void;
   onShare?: (storyId: string) => void;
+  onHideSource?: (sourceId: string, sourceName: string) => void;
 }
 
-export function StoryCard({ story, isActive, language, isSaved, onSave, onShare }: StoryCardProps) {
+export function StoryCard({ story, isActive, language, isSaved, onSave, onShare, onHideSource }: StoryCardProps) {
   const { colors } = useTheme();
   const isArabic = language === 'ar';
   const title = isArabic ? story.title_ar : story.title_en;
   const summary = isArabic ? story.summary_ar : story.summary_en;
   const whyItMatters = isArabic ? story.why_it_matters_ar : story.why_it_matters_en;
+  const [showActionSheet, setShowActionSheet] = useState(false);
 
   const handleSave = useCallback(() => {
     HapticFeedback.saveStory();
@@ -58,6 +61,27 @@ export function StoryCard({ story, isActive, language, isSaved, onSave, onShare 
     HapticFeedback.buttonPress();
     router.push(`/story/${story.id}`);
   }, [story.id]);
+
+  const handleOpenMenu = useCallback(() => {
+    HapticFeedback.buttonPress();
+    setShowActionSheet(true);
+  }, []);
+
+  const handleHideSource = useCallback(() => {
+    if (story.source_id && story.source) {
+      onHideSource?.(story.source_id, story.source.name);
+    }
+  }, [story.source_id, story.source, onHideSource]);
+
+  const sourceName = story.source?.name || (isArabic ? 'هذا المصدر' : 'this source');
+  const actionSheetOptions: ActionSheetOption[] = [
+    {
+      label: `Hide posts from ${sourceName}`,
+      labelAr: `إخفاء منشورات ${sourceName}`,
+      icon: 'eye-slash',
+      onPress: handleHideSource,
+    },
+  ];
 
   const formatCount = (count: number): string => {
     if (count >= 1000000) {
@@ -188,9 +212,29 @@ export function StoryCard({ story, isActive, language, isSaved, onSave, onShare 
                 {formatCount(story.share_count)}
               </Text>
             </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={handleOpenMenu}
+              activeOpacity={0.7}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              accessibilityRole="button"
+              accessibilityLabel={isArabic ? 'المزيد من الخيارات' : 'More options'}
+            >
+              <FontAwesome name="ellipsis-v" size={24} color="#fff" />
+            </TouchableOpacity>
           </View>
         </LinearGradient>
       </ImageBackground>
+
+      {/* Action Sheet */}
+      <ActionSheet
+        visible={showActionSheet}
+        onClose={() => setShowActionSheet(false)}
+        title="Story Options"
+        titleAr="خيارات الخبر"
+        options={actionSheetOptions}
+      />
     </View>
   );
 }

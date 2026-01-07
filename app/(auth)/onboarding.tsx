@@ -9,11 +9,13 @@ import {
 } from 'react-native';
 import { FontAwesome } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { useAppStore, useAuthStore } from '@/stores';
+import { useAppStore } from '@/stores';
+import { useSubscriptionStore } from '@/stores/subscription';
+import { useTopics } from '@/hooks';
 import { useTheme } from '@/contexts/ThemeContext';
-import { getTopics } from '@/lib/api';
 import { spacing, borderRadius, fontSize, fontWeight } from '@/constants';
 import { getTopicIcon, getTopicColor } from '@/constants/topicIcons';
+import { TopicGridSkeleton } from '@/components/SkeletonLoader';
 import type { Topic } from '@/types';
 
 // Mock topics for initial development
@@ -29,35 +31,27 @@ const MOCK_TOPICS: Topic[] = [
 ];
 
 export default function OnboardingScreen() {
-  const [topics, setTopics] = useState<Topic[]>(MOCK_TOPICS);
+  const { data: topics = MOCK_TOPICS, isLoading: isLoadingTopics } = useTopics();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [isLoading, setIsLoading] = useState(false);
-  const { settings } = useAppStore();
-  const { setSelectedTopics, setOnboarded } = useAppStore();
+  const [isSaving, setIsSaving] = useState(false);
+  const { settings, setSelectedTopics, setOnboarded, selectedTopics } = useAppStore();
+  const { isPremium } = useSubscriptionStore();
+  const topicLimit = useSubscriptionStore((state) => state.getTopicLimit());
   const { colors } = useTheme();
 
+  // Hydrate local state from store on mount (for editing existing selections)
   useEffect(() => {
-    loadTopics();
-  }, []);
-
-  const loadTopics = async () => {
-    try {
-      const data = await getTopics();
-      if (data.length > 0) {
-        setTopics(data);
-      }
-    } catch (error) {
-      // Use mock topics if API fails
-      console.log('Using mock topics');
+    if (selectedTopics.length > 0) {
+      setSelectedIds(new Set(selectedTopics.map((t) => t.id)));
     }
-  };
+  }, []);
 
   const toggleTopic = (topicId: string) => {
     setSelectedIds((prev) => {
       const newSet = new Set(prev);
       if (newSet.has(topicId)) {
         newSet.delete(topicId);
-      } else {
+      } else if (newSet.size < topicLimit) {
         newSet.add(topicId);
       }
       return newSet;
@@ -94,8 +88,8 @@ export default function OnboardingScreen() {
         </Text>
         <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
           {isArabic
-            ? 'اختر 3 مواضيع على الأقل لتخصيص تجربتك'
-            : 'Select at least 3 topics to personalize your feed'}
+            ? 'نغطي كل ما يهمك - من الأخبار للرياضة للتقنية والمزيد'
+            : 'We cover everything you care about - news, sports, tech, and more'}
         </Text>
       </View>
 
@@ -105,46 +99,63 @@ export default function OnboardingScreen() {
         contentContainerStyle={styles.topicsGrid}
         showsVerticalScrollIndicator={false}
       >
-        {topics.map((topic) => {
-          const isSelected = selectedIds.has(topic.id);
-          const topicColor = topic.color || getTopicColor(topic.slug);
-          return (
-            <TouchableOpacity
-              key={topic.id}
-              style={[
-                styles.topicCard,
-                { backgroundColor: colors.surface },
-                topicColor && { borderColor: topicColor },
-                isSelected && topicColor && { backgroundColor: topicColor },
-              ]}
-              onPress={() => toggleTopic(topic.id)}
-              activeOpacity={0.7}
-            >
-              <FontAwesome
-                name={getTopicIcon(topic.slug)}
-                size={32}
-                color={isSelected ? '#FFFFFF' : topicColor}
-              />
-              <Text
+        {isLoadingTopics ? (
+          <TopicGridSkeleton count={8} />
+        ) : (
+          topics.map((topic) => {
+            const isSelected = selectedIds.has(topic.id);
+            const topicColor = topic.color || getTopicColor(topic.slug);
+            return (
+              <TouchableOpacity
+                key={topic.id}
                 style={[
-                  styles.topicName,
-                  { color: colors.textPrimary },
-                  isSelected && styles.topicNameSelected,
+                  styles.topicCard,
+                  { backgroundColor: colors.surface },
+                  topicColor && { borderColor: topicColor },
+                  isSelected && topicColor && { backgroundColor: topicColor },
                 ]}
+                onPress={() => toggleTopic(topic.id)}
+                activeOpacity={0.7}
               >
-                {isArabic ? topic.name_ar : topic.name_en}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
+                <FontAwesome
+                  name={getTopicIcon(topic.slug)}
+                  size={32}
+                  color={isSelected ? '#FFFFFF' : topicColor}
+                />
+                <Text
+                  style={[
+                    styles.topicName,
+                    { color: colors.textPrimary },
+                    isSelected && styles.topicNameSelected,
+                  ]}
+                >
+                  {isArabic ? topic.name_ar : topic.name_en}
+                </Text>
+              </TouchableOpacity>
+            );
+          })
+        )}
       </ScrollView>
 
       {/* Continue Button */}
       <View style={[styles.footer, { borderTopColor: colors.border }]}>
         <Text style={[styles.selectedCount, { color: colors.textSecondary }]}>
-          {selectedIds.size} / 3{' '}
+          {selectedIds.size} / {isPremium ? '∞' : topicLimit}{' '}
           {isArabic ? 'مواضيع محددة' : 'topics selected'}
         </Text>
+        {!isPremium && selectedIds.size >= topicLimit && (
+          <TouchableOpacity
+            style={styles.upgradePrompt}
+            onPress={() => router.push('/subscription')}
+            accessibilityRole="button"
+            accessibilityLabel={isArabic ? 'اشترك للمزيد' : 'Upgrade for unlimited topics'}
+          >
+            <FontAwesome name="star" size={14} color="#FFD700" />
+            <Text style={[styles.upgradeText, { color: colors.primary }]}>
+              {isArabic ? 'اشترك للمزيد' : 'Upgrade for unlimited topics'}
+            </Text>
+          </TouchableOpacity>
+        )}
         <TouchableOpacity
           style={[
             styles.continueButton,
@@ -152,9 +163,9 @@ export default function OnboardingScreen() {
             selectedIds.size < 3 && [styles.continueButtonDisabled, { backgroundColor: colors.surfaceLight }],
           ]}
           onPress={handleContinue}
-          disabled={selectedIds.size < 3 || isLoading}
+          disabled={selectedIds.size < 3 || isSaving}
         >
-          {isLoading ? (
+          {isSaving ? (
             <ActivityIndicator color="#fff" />
           ) : (
             <Text style={[styles.continueButtonText, selectedIds.size < 3 && { color: colors.textMuted }]}>
@@ -230,7 +241,19 @@ const styles = StyleSheet.create({
   selectedCount: {
     fontSize: fontSize.sm,
     textAlign: 'center',
+    marginBottom: spacing.sm,
+  },
+  upgradePrompt: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
     marginBottom: spacing.lg,
+    paddingVertical: spacing.sm,
+  },
+  upgradeText: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.semibold,
   },
   continueButton: {
     borderRadius: borderRadius.md,

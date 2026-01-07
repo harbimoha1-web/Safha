@@ -145,7 +145,7 @@ export default function LoginScreen() {
           <Text style={[styles.logo, { color: colors.textPrimary }]}>صفحة</Text>
           <Text style={[styles.subtitle, { color: colors.textPrimary }]}>Safha</Text>
           <Text style={[styles.tagline, { color: colors.textSecondary }]}>
-            {isArabic ? 'رفيقك الإخباري المدعوم بالذكاء الاصطناعي' : 'Your AI-Powered News Companion'}
+            {isArabic ? 'كل اهتماماتك. من مصادر موثوقة.' : 'All your interests. From trusted sources.'}
           </Text>
         </View>
 

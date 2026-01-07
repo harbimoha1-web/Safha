@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { Language, Theme, AppSettings, Topic } from '@/types';
+import type { Language, Theme, NewsFrequency, AppSettings, Topic } from '@/types';
 import { MAX_RECENT_SEARCHES } from '@/constants/config';
 
 interface AppState {
@@ -20,11 +20,18 @@ interface AppState {
   hasSurveyCompleted: boolean;
   currentStoryIndex: number;
 
+  // Feed Filters
+  activeFilters: string[];
+
+  // Source Management - stores deselected sources (all enabled by default)
+  deselectedSources: string[];
+
   // Actions
   setLanguage: (language: Language) => void;
   setTheme: (theme: Theme) => void;
   setTextSize: (size: 'small' | 'medium' | 'large') => void;
   setAutoPlayVideos: (enabled: boolean) => void;
+  setNewsFrequency: (frequency: NewsFrequency) => void;
   setSelectedTopics: (topics: Topic[]) => void;
   setAvailableTopics: (topics: Topic[]) => void;
   setOnboarded: (value: boolean) => void;
@@ -32,6 +39,14 @@ interface AppState {
   setCurrentStoryIndex: (index: number) => void;
   addRecentSearch: (query: string) => void;
   clearRecentSearches: () => void;
+  setActiveFilters: (ids: string[]) => void;
+  toggleActiveFilter: (id: string) => void;
+  clearActiveFilters: () => void;
+  // Source management actions
+  toggleSourceSelection: (sourceId: string) => void;
+  selectAllVisibleSources: (sourceIds: string[]) => void;
+  deselectAllVisibleSources: (sourceIds: string[]) => void;
+  resetSourceSelections: () => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -42,6 +57,7 @@ export const useAppStore = create<AppState>()(
         theme: 'system',
         textSize: 'medium',
         autoPlayVideos: true,
+        newsFrequency: null,
       },
       selectedTopics: [],
       availableTopics: [],
@@ -49,6 +65,8 @@ export const useAppStore = create<AppState>()(
       isOnboarded: false,
       hasSurveyCompleted: false,
       currentStoryIndex: 0,
+      activeFilters: [],
+      deselectedSources: [],
 
       setLanguage: (language) =>
         set((state) => ({
@@ -68,6 +86,11 @@ export const useAppStore = create<AppState>()(
       setAutoPlayVideos: (autoPlayVideos) =>
         set((state) => ({
           settings: { ...state.settings, autoPlayVideos },
+        })),
+
+      setNewsFrequency: (newsFrequency) =>
+        set((state) => ({
+          settings: { ...state.settings, newsFrequency },
         })),
 
       setSelectedTopics: (selectedTopics) => set({ selectedTopics }),
@@ -90,6 +113,42 @@ export const useAppStore = create<AppState>()(
         }),
 
       clearRecentSearches: () => set({ recentSearches: [] }),
+
+      setActiveFilters: (activeFilters) => set({ activeFilters }),
+
+      toggleActiveFilter: (id) =>
+        set((state) => {
+          const exists = state.activeFilters.includes(id);
+          return {
+            activeFilters: exists
+              ? state.activeFilters.filter((f) => f !== id)
+              : [...state.activeFilters, id],
+          };
+        }),
+
+      clearActiveFilters: () => set({ activeFilters: [] }),
+
+      // Source management actions
+      toggleSourceSelection: (sourceId) =>
+        set((state) => ({
+          deselectedSources: state.deselectedSources.includes(sourceId)
+            ? state.deselectedSources.filter((id) => id !== sourceId)
+            : [...state.deselectedSources, sourceId],
+        })),
+
+      selectAllVisibleSources: (sourceIds) =>
+        set((state) => ({
+          deselectedSources: state.deselectedSources.filter(
+            (id) => !sourceIds.includes(id)
+          ),
+        })),
+
+      deselectAllVisibleSources: (sourceIds) =>
+        set((state) => ({
+          deselectedSources: [...new Set([...state.deselectedSources, ...sourceIds])],
+        })),
+
+      resetSourceSelections: () => set({ deselectedSources: [] }),
     }),
     {
       name: 'safha-app-storage',
@@ -100,6 +159,8 @@ export const useAppStore = create<AppState>()(
         recentSearches: state.recentSearches,
         isOnboarded: state.isOnboarded,
         hasSurveyCompleted: state.hasSurveyCompleted,
+        activeFilters: state.activeFilters,
+        deselectedSources: state.deselectedSources,
       }),
     }
   )

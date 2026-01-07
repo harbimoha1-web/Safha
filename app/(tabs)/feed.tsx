@@ -19,20 +19,35 @@ import { useAppStore, useAuthStore } from '@/stores';
 import { useSubscriptionStore } from '@/stores/subscription';
 import { useGamificationStore } from '@/stores/gamification';
 import { recordInteraction } from '@/lib/api';
-import { useStories, useSavedStories, useSaveStory, useUnsaveStory } from '@/hooks';
+import { useStories, useSavedStories, useSaveStory, useUnsaveStory, useBlockSource } from '@/hooks';
 import { useTheme } from '@/contexts/ThemeContext';
 import { PREFETCH_THRESHOLD, colors as defaultColors, spacing, borderRadius, fontSize, fontWeight } from '@/constants';
 
 export default function FeedScreen() {
   const pagerRef = useRef<PagerView>(null);
-  const { currentStoryIndex, setCurrentStoryIndex, settings, selectedTopics } = useAppStore();
+  const {
+    currentStoryIndex,
+    setCurrentStoryIndex,
+    settings,
+    selectedTopics,
+    activeFilters,
+    toggleActiveFilter,
+    clearActiveFilters,
+  } = useAppStore();
   const { user } = useAuthStore();
   const { isPremium } = useSubscriptionStore();
   const { stats, fetchStats } = useGamificationStore();
   const { colors } = useTheme();
   const isArabic = settings.language === 'ar';
-  const [activeFilter, setActiveFilter] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [feedMode, setFeedMode] = useState<'interests' | 'explore'>('interests');
+
+  // Reorder topics - active filters first
+  const orderedTopics = useMemo(() => {
+    const active = selectedTopics.filter((t) => activeFilters.includes(t.id));
+    const inactive = selectedTopics.filter((t) => !activeFilters.includes(t.id));
+    return [...active, ...inactive];
+  }, [selectedTopics, activeFilters]);
 
   // Fetch stats on mount
   useEffect(() => {
@@ -45,17 +60,22 @@ export default function FeedScreen() {
   const { data: savedStoriesData } = useSavedStories();
   const saveStoryMutation = useSaveStory();
   const unsaveStoryMutation = useUnsaveStory();
+  const blockSourceMutation = useBlockSource();
 
   const savedStoryIds = useMemo(() => {
     return new Set(savedStoriesData?.map((s) => s.story_id) ?? []);
   }, [savedStoriesData]);
 
-  // Get topic IDs from selected topics (or single active filter)
+  // Get topic IDs from active filters (multi-select) or all selected topics
   const topicIds = useMemo(() => {
-    if (activeFilter) return [activeFilter];
+    // Explore mode = no filter, show everything
+    if (feedMode === 'explore') return undefined;
+
+    // My Interests mode
+    if (activeFilters.length > 0) return activeFilters;
     if (selectedTopics.length === 0) return undefined;
     return selectedTopics.map((t) => t.id);
-  }, [selectedTopics, activeFilter]);
+  }, [selectedTopics, activeFilters, feedMode]);
 
   const {
     data,
@@ -112,6 +132,40 @@ export default function FeedScreen() {
       }
     },
     [user]
+  );
+
+  const handleHideSource = useCallback(
+    (sourceId: string, sourceName: string) => {
+      if (!user) {
+        router.push('/(auth)/login');
+        return;
+      }
+
+      blockSourceMutation.mutate(sourceId, {
+        onSuccess: () => {
+          Alert.alert(
+            isArabic ? 'تم' : 'Done',
+            isArabic
+              ? `تم إخفاء منشورات ${sourceName}`
+              : `Hidden posts from ${sourceName}`
+          );
+        },
+        onError: (error: any) => {
+          if (error.code === 'ALREADY_BLOCKED') {
+            Alert.alert(
+              isArabic ? 'تنبيه' : 'Note',
+              isArabic ? 'هذا المصدر مخفي بالفعل' : 'Source already hidden'
+            );
+          } else {
+            Alert.alert(
+              isArabic ? 'خطأ' : 'Error',
+              isArabic ? 'فشل في إخفاء المصدر' : 'Failed to hide source'
+            );
+          }
+        },
+      });
+    },
+    [user, blockSourceMutation, isArabic]
   );
 
   const onPageSelected = useCallback(
@@ -205,8 +259,56 @@ export default function FeedScreen() {
           </TouchableOpacity>
       </View>
 
-      {/* Topic Filter Bar */}
-      {selectedTopics.length > 0 && (
+      {/* Premium Pill Toggle */}
+      <View style={styles.feedModeToggle}>
+        <View style={styles.feedModePill}>
+          <TouchableOpacity
+            style={[
+              styles.feedModeSegment,
+              feedMode === 'interests' && styles.feedModeSegmentActive,
+            ]}
+            onPress={() => setFeedMode('interests')}
+            accessibilityRole="button"
+            accessibilityLabel={isArabic ? 'اهتماماتي' : 'For You'}
+          >
+            <FontAwesome
+              name="heart"
+              size={16}
+              color={feedMode === 'interests' ? '#000' : '#fff'}
+            />
+            <Text style={[
+              styles.feedModeText,
+              { color: feedMode === 'interests' ? '#000' : '#fff' },
+            ]}>
+              {isArabic ? 'اهتماماتي' : 'For You'}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.feedModeSegment,
+              feedMode === 'explore' && styles.feedModeSegmentActive,
+            ]}
+            onPress={() => setFeedMode('explore')}
+            accessibilityRole="button"
+            accessibilityLabel={isArabic ? 'استكشف' : 'Explore'}
+          >
+            <FontAwesome
+              name="compass"
+              size={16}
+              color={feedMode === 'explore' ? '#000' : '#fff'}
+            />
+            <Text style={[
+              styles.feedModeText,
+              { color: feedMode === 'explore' ? '#000' : '#fff' },
+            ]}>
+              {isArabic ? 'استكشف' : 'Explore'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Topic Filter Bar - Only show in interests mode */}
+      {feedMode === 'interests' && selectedTopics.length > 0 && (
         <View style={styles.filterBar}>
           <ScrollView
             horizontal
@@ -230,36 +332,36 @@ export default function FeedScreen() {
               style={[
                 styles.filterChip,
                 { backgroundColor: colors.surfaceOverlay, borderColor: colors.borderLight },
-                !activeFilter && { backgroundColor: colors.primary, borderColor: colors.primary },
+                activeFilters.length === 0 && { backgroundColor: colors.primary, borderColor: colors.primary },
               ]}
-              onPress={() => setActiveFilter(null)}
+              onPress={() => clearActiveFilters()}
               accessibilityLabel={isArabic ? 'الكل' : 'All'}
               accessibilityRole="button"
             >
               <Text style={[
                 styles.filterChipText,
                 { color: colors.textPrimary },
-                !activeFilter && { color: colors.white },
+                activeFilters.length === 0 && { color: colors.white },
               ]}>
                 {isArabic ? 'الكل' : 'All'}
               </Text>
             </TouchableOpacity>
-            {selectedTopics.map((topic) => (
+            {orderedTopics.map((topic) => (
               <TouchableOpacity
                 key={topic.id}
                 style={[
                   styles.filterChip,
                   { backgroundColor: colors.surfaceOverlay, borderColor: colors.borderLight },
-                  activeFilter === topic.id && { backgroundColor: colors.primary, borderColor: colors.primary },
+                  activeFilters.includes(topic.id) && { backgroundColor: colors.primary, borderColor: colors.primary },
                 ]}
-                onPress={() => setActiveFilter(activeFilter === topic.id ? null : topic.id)}
+                onPress={() => toggleActiveFilter(topic.id)}
                 accessibilityLabel={isArabic ? topic.name_ar : topic.name_en}
                 accessibilityRole="button"
               >
                 <Text style={[
                   styles.filterChipText,
                   { color: colors.textPrimary },
-                  activeFilter === topic.id && { color: colors.white },
+                  activeFilters.includes(topic.id) && { color: colors.white },
                 ]}>
                   {isArabic ? topic.name_ar : topic.name_en}
                 </Text>
@@ -297,6 +399,7 @@ export default function FeedScreen() {
               isSaved={savedStoryIds.has(story.id)}
               onSave={handleSaveStory}
               onShare={handleShareStory}
+              onHideSource={handleHideSource}
             />
           </View>
         ))}
@@ -338,6 +441,44 @@ const styles = StyleSheet.create({
   },
   spinning: {
     opacity: 0.5,
+  },
+  feedModeToggle: {
+    position: 'absolute',
+    bottom: 20,
+    left: 0,
+    right: 0,
+    zIndex: 25,
+    alignItems: 'center',
+  },
+  feedModePill: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(0,0,0,0.75)',
+    borderRadius: 25,
+    padding: 4,
+    // Shadow for iOS
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    // Shadow for Android
+    elevation: 8,
+  },
+  feedModeSegment: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderRadius: 21,
+    minWidth: 110,
+  },
+  feedModeSegmentActive: {
+    backgroundColor: '#fff',
+  },
+  feedModeText: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.semibold,
   },
   safhaButton: {
     flexDirection: 'row',

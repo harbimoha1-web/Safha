@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import type { Story, Topic, Profile, SavedStory, Note } from '@/types';
+import type { Story, Topic, Source, Profile, SavedStory, Note, BlockedSource, TopicSourceMapping } from '@/types';
 import {
   StoryQuerySchema,
   SearchQuerySchema,
@@ -34,7 +34,8 @@ const STORY_SELECT = `
 export async function getStories(
   limit = 20,
   offset = 0,
-  topicIds?: string[]
+  topicIds?: string[],
+  blockedSourceIds?: string[]
 ): Promise<Story[]> {
   // Validate inputs
   const validated = validateInput(StoryQuerySchema, { limit, offset, topicIds });
@@ -47,6 +48,11 @@ export async function getStories(
   // Filter by topics if provided
   if (validated.topicIds && validated.topicIds.length > 0) {
     query = query.overlaps('topic_ids', validated.topicIds);
+  }
+
+  // Filter out blocked sources
+  if (blockedSourceIds && blockedSourceIds.length > 0) {
+    query = query.not('source_id', 'in', `(${blockedSourceIds.join(',')})`);
   }
 
   const { data, error } = await query.range(
@@ -108,6 +114,20 @@ export async function getTopics(): Promise<Topic[]> {
 
   if (error) {
     throw new APIError(`Failed to fetch topics: ${error.message}`, 500, error.code);
+  }
+  return data || [];
+}
+
+// Sources API
+export async function getSources(): Promise<Source[]> {
+  const { data, error } = await supabase
+    .from('sources')
+    .select('*')
+    .eq('is_active', true)
+    .order('name');
+
+  if (error) {
+    throw new APIError(`Failed to fetch sources: ${error.message}`, 500, error.code);
   }
   return data || [];
 }
@@ -443,6 +463,91 @@ export async function getDailySummaryStories(
     throw new APIError(`Failed to fetch summary stories: ${error.message}`, 500, error.code);
   }
 
+  return data || [];
+}
+
+// Blocked Sources API
+export async function getBlockedSources(userId: string): Promise<BlockedSource[]> {
+  const validUserId = validateInput(UserIdSchema, userId);
+
+  const { data, error } = await supabase
+    .from('blocked_sources')
+    .select(`
+      *,
+      source:sources(*)
+    `)
+    .eq('user_id', validUserId)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    throw new APIError(`Failed to fetch blocked sources: ${error.message}`, 500, error.code);
+  }
+  return data || [];
+}
+
+export async function getBlockedSourceIds(userId: string): Promise<string[]> {
+  const validUserId = validateInput(UserIdSchema, userId);
+
+  const { data, error } = await supabase
+    .from('blocked_sources')
+    .select('source_id')
+    .eq('user_id', validUserId);
+
+  if (error) {
+    throw new APIError(`Failed to fetch blocked source IDs: ${error.message}`, 500, error.code);
+  }
+  return (data || []).map(item => item.source_id);
+}
+
+export async function blockSource(
+  userId: string,
+  sourceId: string
+): Promise<BlockedSource> {
+  const validUserId = validateInput(UserIdSchema, userId);
+  const validSourceId = validateInput(StoryIdSchema, sourceId);
+
+  const { data, error } = await supabase
+    .from('blocked_sources')
+    .insert({ user_id: validUserId, source_id: validSourceId })
+    .select()
+    .single();
+
+  if (error) {
+    if (error.code === '23505') {
+      throw new APIError('Source already blocked', 409, 'ALREADY_BLOCKED');
+    }
+    throw new APIError(`Failed to block source: ${error.message}`, 500, error.code);
+  }
+  return data;
+}
+
+export async function unblockSource(userId: string, sourceId: string): Promise<void> {
+  const validUserId = validateInput(UserIdSchema, userId);
+  const validSourceId = validateInput(StoryIdSchema, sourceId);
+
+  const { error } = await supabase
+    .from('blocked_sources')
+    .delete()
+    .eq('user_id', validUserId)
+    .eq('source_id', validSourceId);
+
+  if (error) {
+    throw new APIError(`Failed to unblock source: ${error.message}`, 500, error.code);
+  }
+}
+
+// Topic-Source Mapping API
+export async function getTopicSourceMapping(): Promise<TopicSourceMapping[]> {
+  const { data, error } = await supabase.rpc('get_topic_source_mapping');
+
+  if (error) {
+    // Handle missing function gracefully for development
+    if (error.code === 'PGRST202' || error.message?.includes('function')) {
+      console.log('Topic-source mapping function not available, returning empty');
+      return [];
+    }
+    throw new APIError(`Failed to fetch topic-source mapping: ${error.message}`, 500, error.code);
+  }
   return data || [];
 }
 

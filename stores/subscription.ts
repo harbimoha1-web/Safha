@@ -2,6 +2,8 @@
 // Manages user subscription state and premium features
 
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '@/lib/supabase';
 import Constants from 'expo-constants';
 import {
@@ -9,6 +11,9 @@ import {
   createSubscriptionInvoice,
   type PlanType,
 } from '@/lib/payments/moyasar';
+
+// Intent TTL: 24 hours
+const INTENT_TTL_MS = 24 * 60 * 60 * 1000;
 
 // Environment configuration
 const IS_PRODUCTION = Constants.expoConfig?.extra?.isProduction ?? false;
@@ -33,11 +38,19 @@ interface PaymentResult {
   error?: string;
 }
 
+// Pending subscription intent - persisted to survive app restarts
+interface PendingSubscriptionIntent {
+  plan: PlanType;
+  createdAt: number;
+  source: 'paywall' | 'deeplink' | 'promotion';
+}
+
 interface SubscriptionState {
   subscription: Subscription | null;
   isLoading: boolean;
   isPremium: boolean;
   pendingPayment: { plan: PlanType; invoiceId: string } | null;
+  pendingSubscriptionIntent: PendingSubscriptionIntent | null;
 
   // Actions
   fetchSubscription: () => Promise<void>;
@@ -47,13 +60,21 @@ interface SubscriptionState {
   checkFeatureAccess: (feature: keyof typeof SUBSCRIPTION_PLANS.premium.features) => boolean;
   getTopicLimit: () => number;
   reset: () => void;
+
+  // Intent management
+  setSubscriptionIntent: (plan: PlanType, source: 'paywall' | 'deeplink' | 'promotion') => void;
+  clearSubscriptionIntent: () => void;
+  getValidIntent: () => PendingSubscriptionIntent | null;
 }
 
-export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
-  subscription: null,
-  isLoading: true,
-  isPremium: false,
-  pendingPayment: null,
+export const useSubscriptionStore = create<SubscriptionState>()(
+  persist(
+    (set, get) => ({
+      subscription: null,
+      isLoading: true,
+      isPremium: false,
+      pendingPayment: null,
+      pendingSubscriptionIntent: null,
 
   fetchSubscription: async () => {
     set({ isLoading: true });
@@ -230,7 +251,7 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
 
   getTopicLimit: () => {
     const { isPremium } = get();
-    return isPremium ? 999 : 5;
+    return isPremium ? 999 : 3;
   },
 
   reset: () => {
@@ -239,9 +260,49 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
       isLoading: false,
       isPremium: false,
       pendingPayment: null,
+      pendingSubscriptionIntent: null,
     });
   },
-}));
+
+  // Intent management - for handling subscription flow across login
+  setSubscriptionIntent: (plan, source) => {
+    set({
+      pendingSubscriptionIntent: {
+        plan,
+        source,
+        createdAt: Date.now(),
+      },
+    });
+  },
+
+  clearSubscriptionIntent: () => {
+    set({ pendingSubscriptionIntent: null });
+  },
+
+  getValidIntent: () => {
+    const intent = get().pendingSubscriptionIntent;
+    if (!intent) return null;
+
+    // Check TTL - expire after 24 hours
+    const age = Date.now() - intent.createdAt;
+    if (age > INTENT_TTL_MS) {
+      set({ pendingSubscriptionIntent: null });
+      return null;
+    }
+
+    return intent;
+  },
+    }),
+    {
+      name: 'safha-subscription-storage',
+      storage: createJSONStorage(() => AsyncStorage),
+      partialize: (state) => ({
+        // Only persist the intent - subscription status comes from server
+        pendingSubscriptionIntent: state.pendingSubscriptionIntent,
+      }),
+    }
+  )
+);
 
 // Helper hooks
 export function useIsPremium(): boolean {

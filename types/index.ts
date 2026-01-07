@@ -101,6 +101,14 @@ export interface SavedStory {
   created_at: string;
 }
 
+export interface BlockedSource {
+  id: string;
+  user_id: string;
+  source_id: string;
+  source?: Source;
+  created_at: string;
+}
+
 export interface Note {
   id: string;
   user_id: string;
@@ -154,10 +162,18 @@ export interface RawArticle {
 // App State Types
 export type Language = 'ar' | 'en';
 export type Theme = 'light' | 'dark' | 'system';
+export type NewsFrequency = 'daily' | 'weekly' | 'casual' | null;
+export type LanguageFilter = 'all' | 'ar' | 'en';
+
+export interface TopicSourceMapping {
+  topic_id: string;
+  source_ids: string[];
+}
 
 export interface AppSettings {
   language: Language;
   theme: Theme;
   textSize: 'small' | 'medium' | 'large';
   autoPlayVideos: boolean;
+  newsFrequency: NewsFrequency;
 }

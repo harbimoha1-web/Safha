@@ -100,6 +100,7 @@ import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 
 import { useAuthStore, useAppStore } from '@/stores';
+import { useSubscriptionStore } from '@/stores/subscription';
 import { supabase } from '@/lib/supabase';
 import { queryClient } from '@/lib/queryClient';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -235,13 +236,30 @@ export default function RootLayout() {
 
 function RootLayoutNav() {
   const { settings } = useAppStore();
+  const { user } = useAuthStore();
+  const { getValidIntent, isPremium } = useSubscriptionStore();
   const [initError, setInitError] = useState<string | null>(null);
   const [isReady, setIsReady] = useState(false);
+  const [hasCheckedIntent, setHasCheckedIntent] = useState(false);
 
   useProtectedRoute(
     (error) => setInitError(error),
     () => setIsReady(true)
   );
+
+  // Handle pending subscription intent after user logs in
+  useEffect(() => {
+    if (!user || !isReady || hasCheckedIntent) return;
+
+    const intent = getValidIntent();
+    if (intent && !isPremium) {
+      setHasCheckedIntent(true);
+      // Navigate to subscription screen to complete the flow
+      router.push('/subscription');
+    } else {
+      setHasCheckedIntent(true);
+    }
+  }, [user, isReady, isPremium, hasCheckedIntent]);
 
   // Show error screen if initialization failed
   if (initError) {
