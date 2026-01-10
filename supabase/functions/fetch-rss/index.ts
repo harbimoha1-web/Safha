@@ -29,6 +29,29 @@ interface FetchResult {
   error?: string;
 }
 
+// Resolve relative URLs to absolute URLs
+function resolveImageUrl(imageUrl: string | null, baseUrl: string): string | null {
+  if (!imageUrl) return null;
+
+  // Already absolute
+  if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+    return imageUrl;
+  }
+
+  // Protocol-relative (//example.com/img.jpg)
+  if (imageUrl.startsWith('//')) {
+    return 'https:' + imageUrl;
+  }
+
+  // Relative URL - resolve against base
+  try {
+    const base = new URL(baseUrl);
+    return new URL(imageUrl, base.origin).href;
+  } catch {
+    return null;
+  }
+}
+
 // Generate content hash for deduplication
 async function generateContentHash(content: string): Promise<string> {
   const encoder = new TextEncoder();
@@ -93,13 +116,15 @@ function extractImageUrl(item: any): string | null {
 async function fetchOgImage(url: string): Promise<string | null> {
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout (increased)
 
     const response = await fetch(url, {
       signal: controller.signal,
       headers: {
-        'User-Agent': 'Safha News Aggregator/1.0',
-        'Accept': 'text/html',
+        // Use browser-like User-Agent to avoid being blocked
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9,ar;q=0.8',
       },
     });
     clearTimeout(timeoutId);
@@ -108,24 +133,30 @@ async function fetchOgImage(url: string): Promise<string | null> {
 
     const html = await response.text();
 
-    // Try og:image first (most reliable)
-    const ogImageMatch = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)
-      || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i);
+    // Try og:image first (most reliable) - handle various attribute orders
+    const ogImageMatch = html.match(/<meta[^>]*property\s*=\s*["']og:image["'][^>]*content\s*=\s*["']([^"']+)["']/i)
+      || html.match(/<meta[^>]*content\s*=\s*["']([^"']+)["'][^>]*property\s*=\s*["']og:image["']/i);
     if (ogImageMatch?.[1]) {
-      return ogImageMatch[1];
+      return resolveImageUrl(ogImageMatch[1], url);
     }
 
     // Try twitter:image
-    const twitterImageMatch = html.match(/<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i)
-      || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']twitter:image["']/i);
+    const twitterImageMatch = html.match(/<meta[^>]*name\s*=\s*["']twitter:image["'][^>]*content\s*=\s*["']([^"']+)["']/i)
+      || html.match(/<meta[^>]*content\s*=\s*["']([^"']+)["'][^>]*name\s*=\s*["']twitter:image["']/i);
     if (twitterImageMatch?.[1]) {
-      return twitterImageMatch[1];
+      return resolveImageUrl(twitterImageMatch[1], url);
     }
 
-    // Try first large image in article (min 300px wide to avoid icons)
-    const articleImgMatch = html.match(/<article[^>]*>[\s\S]*?<img[^>]+src=["']([^"']+)["']/i);
+    // Try first image in article, main, or content div
+    const articleImgMatch = html.match(/<(?:article|main|div[^>]*class=["'][^"']*(?:content|article|post|entry)[^"']*["'])[^>]*>[\s\S]*?<img[^>]+src=["']([^"']+)["']/i);
     if (articleImgMatch?.[1]) {
-      return articleImgMatch[1];
+      return resolveImageUrl(articleImgMatch[1], url);
+    }
+
+    // Last resort: any reasonably-sized image (not icons/logos)
+    const anyImgMatch = html.match(/<img[^>]+src=["']([^"']+(?:jpg|jpeg|png|webp)[^"']*)["']/i);
+    if (anyImgMatch?.[1]) {
+      return resolveImageUrl(anyImgMatch[1], url);
     }
 
     return null;
@@ -246,9 +277,19 @@ async function fetchRSSSource(
 
       if (!url || !title) continue;
 
+      // Resolve relative URLs from RSS extraction
+      if (imageUrl) {
+        imageUrl = resolveImageUrl(imageUrl, url);
+      }
+
       // Fallback: fetch og:image from webpage if RSS has no image
       if (!imageUrl && url) {
         imageUrl = await fetchOgImage(url);
+      }
+
+      // Final validation: ensure URL is absolute, discard invalid URLs
+      if (imageUrl && !imageUrl.startsWith('http://') && !imageUrl.startsWith('https://')) {
+        imageUrl = null;
       }
 
       // Generate content hash for deduplication

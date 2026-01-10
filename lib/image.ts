@@ -61,6 +61,12 @@ export function getOptimizedImageUrl(
 ): string | null {
   if (!url) return null;
 
+  // CRITICAL: Validate URL is absolute - reject relative URLs
+  if (!url.startsWith('http://') && !url.startsWith('https://')) {
+    // Relative URL cannot be proxied, return null
+    return null;
+  }
+
   // Skip optimization for already optimized URLs or data URLs
   if (url.startsWith('data:') || url.includes('wsrv.nl')) {
     return url;

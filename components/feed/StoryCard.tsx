@@ -40,10 +40,13 @@ export function StoryCard({ story, isActive, language, isSaved, onSave, onShare,
   const [showActionSheet, setShowActionSheet] = useState(false);
   const [imageError, setImageError] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
+  const [useOriginalUrl, setUseOriginalUrl] = useState(false);
 
   // Get optimized image URL (uses screen dimensions and DPR automatically)
+  // Fallback chain: optimized (wsrv.nl) → original → TopicFallback
   const optimizedImageUrl = getOptimizedImageUrl(story.image_url);
-  const hasValidImage = optimizedImageUrl && !imageError;
+  const displayImageUrl = useOriginalUrl ? story.image_url : optimizedImageUrl;
+  const hasValidImage = displayImageUrl && !imageError;
 
   // Check for video content (only MP4 supported)
   const hasVideo = !!story.video_url && story.video_type === 'mp4';
@@ -56,10 +59,16 @@ export function StoryCard({ story, isActive, language, isSaved, onSave, onShare,
     setImageLoaded(true);
   }, []);
 
-  // Handle image load error
+  // Handle image load error - try original URL before falling back to TopicFallback
   const handleImageError = useCallback(() => {
-    setImageError(true);
-  }, []);
+    if (!useOriginalUrl && story.image_url) {
+      // Try original URL if optimized URL failed
+      setUseOriginalUrl(true);
+    } else {
+      // Both failed, show TopicFallback
+      setImageError(true);
+    }
+  }, [useOriginalUrl, story.image_url]);
 
   const handleSave = useCallback(() => {
     HapticFeedback.saveStory();
@@ -126,7 +135,7 @@ export function StoryCard({ story, isActive, language, isSaved, onSave, onShare,
         <View style={styles.videoContainer}>
           <VideoPlayer
             uri={story.video_url!}
-            poster={optimizedImageUrl || undefined}
+            poster={displayImageUrl || undefined}
             isActive={isActive}
           />
           {/* Content overlay on video */}
@@ -204,7 +213,7 @@ export function StoryCard({ story, isActive, language, isSaved, onSave, onShare,
       ) : hasValidImage ? (
         <View style={styles.imageContainer}>
           <ImageBackground
-            source={{ uri: optimizedImageUrl }}
+            source={{ uri: displayImageUrl }}
             style={styles.backgroundImage}
             resizeMode="cover"
             accessible={true}
