@@ -65,15 +65,26 @@ export default function FeedScreen() {
     return new Set(savedStoriesData?.map((s) => s.story_id) ?? []);
   }, [savedStoriesData]);
 
+  // UUID validation regex for topic IDs
+  const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
   // Get topic IDs from active filters (multi-select) or all selected topics
   const topicIds = useMemo(() => {
     // Explore mode = no filter, show everything
     if (feedMode === 'explore') return undefined;
 
-    // My Interests mode
-    if (activeFilters.length > 0) return activeFilters;
+    // My Interests mode - validate that IDs are proper UUIDs
+    const isValidUUID = (id: string) => UUID_REGEX.test(id);
+
+    if (activeFilters.length > 0) {
+      const validFilters = activeFilters.filter(isValidUUID);
+      return validFilters.length > 0 ? validFilters : undefined;
+    }
+
     if (selectedTopics.length === 0) return undefined;
-    return selectedTopics.map((t) => t.id);
+
+    const validTopicIds = selectedTopics.map((t) => t.id).filter(isValidUUID);
+    return validTopicIds.length > 0 ? validTopicIds : undefined;
   }, [selectedTopics, activeFilters, feedMode]);
 
   const {

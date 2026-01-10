@@ -103,6 +103,9 @@ import { useAuthStore, useAppStore } from '@/stores';
 import { useSubscriptionStore } from '@/stores/subscription';
 import { supabase } from '@/lib/supabase';
 import { queryClient } from '@/lib/queryClient';
+import { getTopics, getSources } from '@/lib/api';
+import { TOPICS_STALE_TIME } from '@/hooks/useTopics';
+import { SOURCES_STALE_TIME } from '@/hooks/useSources';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ToastProvider } from '@/components/Toast';
 import { ThemeProvider, useTheme } from '@/contexts/ThemeContext';
@@ -247,6 +250,42 @@ function RootLayoutNav() {
     () => setIsReady(true)
   );
 
+  // UUID validation regex
+  const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+  // One-time cleanup: Clear invalid cached topics (non-UUID IDs from legacy mock data)
+  useEffect(() => {
+    if (!isReady) return;
+
+    const { selectedTopics, setSelectedTopics, setOnboarded } = useAppStore.getState();
+
+    // Check if any selected topic has an invalid (non-UUID) ID
+    const hasInvalidTopics = selectedTopics.some((t) => !UUID_REGEX.test(t.id));
+
+    if (hasInvalidTopics) {
+      console.warn('[Safha] Clearing invalid cached topics (legacy mock data detected)');
+      setSelectedTopics([]); // Clear invalid topics
+      setOnboarded(false); // Force re-onboarding with real topics
+    }
+  }, [isReady]);
+
+  // Prefetch topics and sources when app is ready (improves perceived performance)
+  useEffect(() => {
+    if (!isReady) return;
+
+    // Prefetch in background - doesn't block UI
+    queryClient.prefetchQuery({
+      queryKey: ['topics'],
+      queryFn: getTopics,
+      staleTime: TOPICS_STALE_TIME,
+    });
+    queryClient.prefetchQuery({
+      queryKey: ['sources'],
+      queryFn: getSources,
+      staleTime: SOURCES_STALE_TIME,
+    });
+  }, [isReady]);
+
   // Handle pending subscription intent after user logs in
   useEffect(() => {
     if (!user || !isReady || hasCheckedIntent) return;
@@ -309,6 +348,7 @@ function ThemedApp() {
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+          <Stack.Screen name="admin" options={{ headerShown: false }} />
           <Stack.Screen
             name="story/[id]"
             options={{

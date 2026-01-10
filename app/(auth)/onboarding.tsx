@@ -18,40 +18,11 @@ import { getTopicIcon, getTopicColor } from '@/constants/topicIcons';
 import { TopicGridSkeleton } from '@/components/SkeletonLoader';
 import type { Topic } from '@/types';
 
-// Mock topics for initial development
-const MOCK_TOPICS: Topic[] = [
-  // Core topics
-  { id: '1', name_ar: 'السياسة', name_en: 'Politics', slug: 'politics', icon: 'university', color: '#DC2626', is_active: true, sort_order: 1 },
-  { id: '2', name_ar: 'الاقتصاد', name_en: 'Economy', slug: 'economy', icon: 'line-chart', color: '#16A34A', is_active: true, sort_order: 2 },
-  { id: '3', name_ar: 'التكنولوجيا', name_en: 'Technology', slug: 'technology', icon: 'laptop', color: '#7C3AED', is_active: true, sort_order: 3 },
-  // New topics
-  { id: '4', name_ar: 'الطعام والمشروبات', name_en: 'Food & Drink', slug: 'food-drink', icon: 'cutlery', color: '#F97316', is_active: true, sort_order: 4 },
-  { id: '5', name_ar: 'الجمال والأناقة', name_en: 'Beauty & Style', slug: 'beauty-style', icon: 'diamond', color: '#EC4899', is_active: true, sort_order: 5 },
-  { id: '6', name_ar: 'الموسيقى', name_en: 'Music', slug: 'music', icon: 'music', color: '#8B5CF6', is_active: true, sort_order: 6 },
-  { id: '7', name_ar: 'اللياقة والصحة', name_en: 'Fitness & Health', slug: 'fitness-health', icon: 'heartbeat', color: '#10B981', is_active: true, sort_order: 7 },
-  { id: '8', name_ar: 'فلوقات', name_en: 'Vlogs', slug: 'vlogs', icon: 'video-camera', color: '#06B6D4', is_active: true, sort_order: 8 },
-  { id: '9', name_ar: 'كوميديا', name_en: 'Comedy', slug: 'comedy', icon: 'smile-o', color: '#FBBF24', is_active: true, sort_order: 9 },
-  { id: '10', name_ar: 'الرياضة', name_en: 'Sports', slug: 'sports', icon: 'futbol-o', color: '#2563EB', is_active: true, sort_order: 10 },
-  { id: '11', name_ar: 'الثقافة الترفيهية', name_en: 'Entertainment Culture', slug: 'entertainment-culture', icon: 'film', color: '#DB2777', is_active: true, sort_order: 11 },
-  { id: '12', name_ar: 'العلوم والتعليم', name_en: 'Science & Education', slug: 'science-education', icon: 'graduation-cap', color: '#0891B2', is_active: true, sort_order: 12 },
-  { id: '13', name_ar: 'العائلة', name_en: 'Family', slug: 'family', icon: 'users', color: '#F472B6', is_active: true, sort_order: 13 },
-  { id: '14', name_ar: 'التحفيز والنصائح', name_en: 'Motivation & Advice', slug: 'motivation-advice', icon: 'lightbulb-o', color: '#A855F7', is_active: true, sort_order: 14 },
-  { id: '15', name_ar: 'الرقص', name_en: 'Dance', slug: 'dance', icon: 'star', color: '#F43F5E', is_active: true, sort_order: 15 },
-  { id: '16', name_ar: 'السفر', name_en: 'Travel', slug: 'travel', icon: 'plane', color: '#F59E0B', is_active: true, sort_order: 16 },
-  { id: '17', name_ar: 'الألعاب', name_en: 'Gaming', slug: 'gaming', icon: 'gamepad', color: '#6366F1', is_active: true, sort_order: 17 },
-  { id: '18', name_ar: 'الحيوانات الأليفة', name_en: 'Pets', slug: 'pets', icon: 'paw', color: '#84CC16', is_active: true, sort_order: 18 },
-  { id: '19', name_ar: 'السيارات والمركبات', name_en: 'Auto & Vehicle', slug: 'auto-vehicle', icon: 'car', color: '#EF4444', is_active: true, sort_order: 19 },
-  { id: '20', name_ar: 'افعلها بنفسك', name_en: 'DIY', slug: 'diy', icon: 'wrench', color: '#78716C', is_active: true, sort_order: 20 },
-  { id: '21', name_ar: 'الفن', name_en: 'Art', slug: 'art', icon: 'paint-brush', color: '#D946EF', is_active: true, sort_order: 21 },
-  { id: '22', name_ar: 'الأنمي والقصص المصورة', name_en: 'Anime & Comics', slug: 'anime-comics', icon: 'book', color: '#FB7185', is_active: true, sort_order: 22 },
-  { id: '23', name_ar: 'حيل الحياة', name_en: 'Life Hacks', slug: 'life-hacks', icon: 'magic', color: '#14B8A6', is_active: true, sort_order: 23 },
-  { id: '24', name_ar: 'الطبيعة', name_en: 'Outdoors', slug: 'outdoors', icon: 'tree', color: '#22C55E', is_active: true, sort_order: 24 },
-  { id: '25', name_ar: 'مرضي بشكل غريب', name_en: 'Oddly Satisfying', slug: 'oddly-satisfying', icon: 'eye', color: '#7C3AED', is_active: true, sort_order: 25 },
-  { id: '26', name_ar: 'المنزل والحديقة', name_en: 'Home & Garden', slug: 'home-garden', icon: 'home', color: '#059669', is_active: true, sort_order: 26 },
-];
+// UUID validation regex for cleanup check
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export default function OnboardingScreen() {
-  const { data: topics = MOCK_TOPICS, isLoading: isLoadingTopics } = useTopics();
+  const { data: topics = [], isLoading: isLoadingTopics, isError, refetch } = useTopics();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isSaving, setIsSaving] = useState(false);
   const { settings, setSelectedTopics, setOnboarded, selectedTopics } = useAppStore();
@@ -90,6 +61,36 @@ export default function OnboardingScreen() {
   };
 
   const isArabic = settings.language === 'ar';
+
+  // Show error state if topics failed to load
+  if (isError || (!isLoadingTopics && topics.length === 0)) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={styles.errorContainer}>
+          <FontAwesome name="exclamation-circle" size={64} color={colors.error || '#DC2626'} />
+          <Text style={[styles.errorTitle, { color: colors.textPrimary }]}>
+            {isArabic ? 'تعذر تحميل المواضيع' : 'Could not load topics'}
+          </Text>
+          <Text style={[styles.errorSubtext, { color: colors.textSecondary }]}>
+            {isArabic
+              ? 'تأكد من اتصالك بالإنترنت وحاول مرة أخرى'
+              : 'Check your internet connection and try again'}
+          </Text>
+          <TouchableOpacity
+            style={[styles.retryButton, { backgroundColor: colors.primary }]}
+            onPress={() => refetch()}
+            accessibilityRole="button"
+            accessibilityLabel={isArabic ? 'إعادة المحاولة' : 'Retry'}
+          >
+            <FontAwesome name="refresh" size={16} color="#fff" style={{ marginRight: 8 }} />
+            <Text style={styles.retryButtonText}>
+              {isArabic ? 'إعادة المحاولة' : 'Retry'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -286,6 +287,37 @@ const styles = StyleSheet.create({
   continueButtonText: {
     color: '#fff',
     fontSize: fontSize.lg,
+    fontWeight: fontWeight.semibold,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: spacing.xl,
+  },
+  errorTitle: {
+    fontSize: fontSize.xl,
+    fontWeight: fontWeight.bold,
+    marginTop: spacing.xl,
+    textAlign: 'center',
+  },
+  errorSubtext: {
+    fontSize: fontSize.md,
+    marginTop: spacing.md,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  retryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.lg,
+    borderRadius: borderRadius.md,
+    marginTop: spacing.xxl,
+  },
+  retryButtonText: {
+    color: '#fff',
+    fontSize: fontSize.md,
     fontWeight: fontWeight.semibold,
   },
 });
