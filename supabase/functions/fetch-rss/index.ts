@@ -5,6 +5,7 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.89.0';
 import { parseFeed } from 'https://deno.land/x/rss@1.0.0/mod.ts';
 import { DOMParser, Element } from 'https://deno.land/x/deno_dom@v0.1.43/deno-dom-wasm.ts';
+import { Readability } from 'https://esm.sh/@mozilla/readability@0.5.0';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -118,6 +119,11 @@ interface WebpageData {
   imageUrl: string | null;
   fullContent: string | null;
   contentQuality: number; // 0-1 score
+  extractionMethod: 'readability' | 'json-ld' | 'dom' | 'failed';
+  // Readability metadata
+  excerpt?: string | null;
+  byline?: string | null;
+  siteName?: string | null;
 }
 
 // Content quality indicators
@@ -174,7 +180,12 @@ function isBoilerplate(text: string): boolean {
 
 // Fetch webpage and extract both og:image and full article content
 async function fetchWebpageData(url: string): Promise<WebpageData> {
-  const result: WebpageData = { imageUrl: null, fullContent: null, contentQuality: 0 };
+  const result: WebpageData = {
+    imageUrl: null,
+    fullContent: null,
+    contentQuality: 0,
+    extractionMethod: 'failed'
+  };
 
   try {
     const controller = new AbortController();
@@ -212,19 +223,51 @@ async function fetchWebpageData(url: string): Promise<WebpageData> {
     result.imageUrl = extractImageFromDOM(doc, url);
 
     // ========== EXTRACT CONTENT ==========
-    // Strategy 1: Try JSON-LD structured data first (most reliable)
+    // Strategy 1: Mozilla Readability (what Firefox Reader Mode & Pocket use)
+    try {
+      // Clone the document since Readability modifies it
+      const docClone = doc.cloneNode(true);
+      const reader = new Readability(docClone, {
+        charThreshold: 200, // Minimum content length
+        keepClasses: false,
+        disableJSONLD: false, // Let Readability also check JSON-LD
+      });
+      const article = reader.parse();
+
+      if (article && article.textContent && article.textContent.length >= 200) {
+        result.fullContent = cleanText(article.textContent);
+        result.extractionMethod = 'readability';
+        result.excerpt = article.excerpt || null;
+        result.byline = article.byline || null;
+        result.siteName = article.siteName || null;
+
+        // Calculate quality score based on Readability metrics
+        result.contentQuality = calculateReadabilityQuality(article);
+
+        console.log(`[fetchWebpageData] Readability extracted ${result.fullContent.length} chars from ${url}`);
+        return result;
+      }
+    } catch (readabilityError) {
+      console.log(`[fetchWebpageData] Readability failed for ${url}:`, readabilityError.message);
+    }
+
+    // Strategy 2: Try JSON-LD structured data (fallback)
     const jsonLdContent = extractFromJsonLd(doc);
     if (jsonLdContent && jsonLdContent.length >= 300) {
       result.fullContent = jsonLdContent;
-      result.contentQuality = 0.9; // High confidence for structured data
+      result.contentQuality = 0.85; // High confidence for structured data
+      result.extractionMethod = 'json-ld';
+      console.log(`[fetchWebpageData] JSON-LD extracted ${jsonLdContent.length} chars from ${url}`);
       return result;
     }
 
-    // Strategy 2: DOM-based extraction with quality scoring
+    // Strategy 3: DOM-based extraction with quality scoring (last resort)
     const { content, quality } = extractArticleContentDOM(doc);
     if (content) {
       result.fullContent = content;
       result.contentQuality = calculateQualityScore(quality);
+      result.extractionMethod = 'dom';
+      console.log(`[fetchWebpageData] DOM extracted ${content.length} chars from ${url}`);
     }
 
     return result;
@@ -232,6 +275,35 @@ async function fetchWebpageData(url: string): Promise<WebpageData> {
     console.error(`[fetchWebpageData] Failed for ${url}:`, error.message || 'Unknown error');
     return result;
   }
+}
+
+// Calculate quality score from Readability article
+function calculateReadabilityQuality(article: any): number {
+  let score = 0.5; // Base score for successful Readability parse
+
+  const length = article.textContent?.length || 0;
+
+  // Length score (0-0.25)
+  if (length >= 2000) score += 0.25;
+  else if (length >= 1000) score += 0.2;
+  else if (length >= 500) score += 0.15;
+  else if (length >= 300) score += 0.1;
+
+  // Has excerpt (0.1)
+  if (article.excerpt && article.excerpt.length > 50) score += 0.1;
+
+  // Has byline/author (0.05)
+  if (article.byline) score += 0.05;
+
+  // Has site name (0.05)
+  if (article.siteName) score += 0.05;
+
+  // Readable content structure (0.05)
+  // Check if content has multiple paragraphs
+  const paragraphCount = (article.textContent?.match(/\n\n/g) || []).length + 1;
+  if (paragraphCount >= 3) score += 0.05;
+
+  return Math.min(score, 1);
 }
 
 // Extract image URL using DOM parsing

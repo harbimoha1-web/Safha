@@ -5,6 +5,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.89.0';
 import { DOMParser, Element } from 'https://deno.land/x/deno_dom@v0.1.43/deno-dom-wasm.ts';
+import { Readability } from 'https://esm.sh/@mozilla/readability@0.5.0';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -44,6 +45,34 @@ function calculateQualityScore(quality: ContentQuality): number {
   else if (quality.totalLength >= 400) score += 0.1;
 
   if (quality.hasProperStructure) score += 0.2;
+  return Math.min(score, 1);
+}
+
+// Calculate quality score from Readability article
+function calculateReadabilityQuality(article: any): number {
+  let score = 0.5; // Base score for successful Readability parse
+
+  const length = article.textContent?.length || 0;
+
+  // Length score (0-0.25)
+  if (length >= 2000) score += 0.25;
+  else if (length >= 1000) score += 0.2;
+  else if (length >= 500) score += 0.15;
+  else if (length >= 300) score += 0.1;
+
+  // Has excerpt (0.1)
+  if (article.excerpt && article.excerpt.length > 50) score += 0.1;
+
+  // Has byline/author (0.05)
+  if (article.byline) score += 0.05;
+
+  // Has site name (0.05)
+  if (article.siteName) score += 0.05;
+
+  // Readable content structure (0.05)
+  const paragraphCount = (article.textContent?.match(/\n\n/g) || []).length + 1;
+  if (paragraphCount >= 3) score += 0.05;
+
   return Math.min(score, 1);
 }
 
@@ -257,15 +286,37 @@ async function fetchArticleContent(url: string): Promise<{
       return { content: null, quality: 0, method: 'parse_failed' };
     }
 
-    // Try JSON-LD first (most reliable)
-    const jsonLdContent = extractFromJsonLd(doc);
-    if (jsonLdContent && jsonLdContent.length >= 300) {
-      return { content: jsonLdContent, quality: 0.9, method: 'json-ld' };
+    // Strategy 1: Mozilla Readability (what Firefox Reader Mode & Pocket use)
+    try {
+      const docClone = doc.cloneNode(true);
+      const reader = new Readability(docClone, {
+        charThreshold: 200,
+        keepClasses: false,
+        disableJSONLD: false,
+      });
+      const article = reader.parse();
+
+      if (article && article.textContent && article.textContent.length >= 200) {
+        const content = cleanText(article.textContent);
+        const quality = calculateReadabilityQuality(article);
+        console.log(`[backfill-content] Readability extracted ${content.length} chars from ${url}`);
+        return { content, quality, method: 'readability' };
+      }
+    } catch (readabilityError) {
+      console.log(`[backfill-content] Readability failed for ${url}:`, readabilityError.message);
     }
 
-    // DOM-based extraction
+    // Strategy 2: JSON-LD structured data (fallback)
+    const jsonLdContent = extractFromJsonLd(doc);
+    if (jsonLdContent && jsonLdContent.length >= 300) {
+      console.log(`[backfill-content] JSON-LD extracted ${jsonLdContent.length} chars from ${url}`);
+      return { content: jsonLdContent, quality: 0.85, method: 'json-ld' };
+    }
+
+    // Strategy 3: DOM-based extraction (last resort)
     const { content, quality } = extractArticleContentDOM(doc);
     if (content) {
+      console.log(`[backfill-content] DOM extracted ${content.length} chars from ${url}`);
       return {
         content,
         quality: calculateQualityScore(quality),
