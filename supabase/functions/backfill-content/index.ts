@@ -1,8 +1,10 @@
 // Supabase Edge Function: Backfill Full Article Content
 // Fetches full article text for stories that have null full_content
+// Uses DOM parsing, JSON-LD extraction, and quality scoring
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.89.0';
+import { DOMParser, Element } from 'https://deno.land/x/deno_dom@v0.1.43/deno-dom-wasm.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -14,141 +16,218 @@ interface BackfillResult {
   original_url: string;
   content_found: boolean;
   content_length?: number;
+  content_quality?: number;
+  extraction_method?: string;
   error?: string;
 }
 
-// Extract article content from HTML using multiple strategies
-function extractArticleContent(html: string): string | null {
-  // Step 1: Remove unwanted elements (scripts, styles, nav, etc.)
-  let cleaned = html
-    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-    .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
-    .replace(/<nav\b[^<]*(?:(?!<\/nav>)<[^<]*)*<\/nav>/gi, '')
-    .replace(/<header\b[^>]*class=["'][^"']*(?:site|main|page|global)[^"']*["'][^<]*(?:(?!<\/header>)<[^<]*)*<\/header>/gi, '')
-    .replace(/<footer\b[^<]*(?:(?!<\/footer>)<[^<]*)*<\/footer>/gi, '')
-    .replace(/<aside\b[^<]*(?:(?!<\/aside>)<[^<]*)*<\/aside>/gi, '')
-    .replace(/<div[^>]*class=["'][^"']*(?:ad-|ads-|advert|promo|banner|sidebar|related|comment|share|social|newsletter|popup|modal)[^"']*["'][^<]*(?:(?!<\/div>)<[^<]*)*<\/div>/gi, '')
-    .replace(/<!--[\s\S]*?-->/g, '');
+interface ContentQuality {
+  paragraphCount: number;
+  avgParagraphLength: number;
+  totalLength: number;
+  hasProperStructure: boolean;
+}
 
-  // Step 2: Try to find the main article content using various strategies
-  let articleHtml: string | null = null;
+// Calculate content quality score (0-1)
+function calculateQualityScore(quality: ContentQuality): number {
+  let score = 0;
+  if (quality.paragraphCount >= 5) score += 0.3;
+  else if (quality.paragraphCount >= 3) score += 0.2;
+  else if (quality.paragraphCount >= 2) score += 0.1;
 
-  // Strategy 1: Look for <article> tag (most semantic)
-  const articleTagMatch = cleaned.match(/<article[^>]*>([\s\S]*?)<\/article>/i);
-  if (articleTagMatch?.[1]) {
-    articleHtml = articleTagMatch[1];
+  if (quality.avgParagraphLength >= 100) score += 0.3;
+  else if (quality.avgParagraphLength >= 60) score += 0.2;
+  else if (quality.avgParagraphLength >= 40) score += 0.1;
+
+  if (quality.totalLength >= 1500) score += 0.2;
+  else if (quality.totalLength >= 800) score += 0.15;
+  else if (quality.totalLength >= 400) score += 0.1;
+
+  if (quality.hasProperStructure) score += 0.2;
+  return Math.min(score, 1);
+}
+
+// Boilerplate phrases to filter out
+const BOILERPLATE_PATTERNS = [
+  /copyright|©|all rights reserved/i,
+  /subscribe|newsletter|sign up/i,
+  /share on|follow us|like us/i,
+  /read more|continue reading|click here/i,
+  /advertisement|sponsored|promoted/i,
+  /cookie|privacy policy|terms of/i,
+  /اشترك|تابعنا|شاركنا/i,
+  /حقوق النشر|جميع الحقوق محفوظة/i,
+  /اقرأ أيضا|مواضيع ذات صلة/i,
+];
+
+function isBoilerplate(text: string): boolean {
+  return BOILERPLATE_PATTERNS.some(pattern => pattern.test(text));
+}
+
+function cleanText(text: string): string {
+  return text
+    .replace(/[\t\r]+/g, ' ')
+    .replace(/\n\s*\n/g, '\n\n')
+    .replace(/  +/g, ' ')
+    .split('\n')
+    .map(line => line.trim())
+    .join('\n')
+    .trim();
+}
+
+// Extract from JSON-LD structured data
+function extractFromJsonLd(doc: Document): string | null {
+  const scripts = doc.querySelectorAll('script[type="application/ld+json"]');
+  for (const script of scripts) {
+    try {
+      const json = JSON.parse(script.textContent || '');
+      const items = Array.isArray(json) ? json : [json];
+      for (const item of items) {
+        if (['NewsArticle', 'Article', 'BlogPosting', 'WebPage'].includes(item['@type'])) {
+          if (item.articleBody && typeof item.articleBody === 'string') {
+            return cleanText(item.articleBody);
+          }
+          if (item.text && typeof item.text === 'string') {
+            return cleanText(item.text);
+          }
+          if (item.description && typeof item.description === 'string' && item.description.length > 300) {
+            return cleanText(item.description);
+          }
+        }
+      }
+    } catch {
+      // Invalid JSON, continue
+    }
+  }
+  return null;
+}
+
+// DOM-based content extraction
+function extractArticleContentDOM(doc: Document): { content: string | null; quality: ContentQuality } {
+  const defaultQuality: ContentQuality = {
+    paragraphCount: 0,
+    avgParagraphLength: 0,
+    totalLength: 0,
+    hasProperStructure: false,
+  };
+
+  // Remove unwanted elements
+  const unwantedSelectors = [
+    'script', 'style', 'nav', 'footer', 'aside', 'header',
+    '.ad', '.ads', '.advertisement', '.promo', '.banner',
+    '.sidebar', '.related', '.comments', '.share', '.social',
+    '.newsletter', '.popup', '.modal', '[role="navigation"]',
+    '.breadcrumb', '.pagination', '.author-bio', '.tags',
+  ];
+
+  for (const selector of unwantedSelectors) {
+    const elements = doc.querySelectorAll(selector);
+    for (const el of elements) {
+      el.remove();
+    }
   }
 
-  // Strategy 2: Look for common article content class names
-  if (!articleHtml) {
-    const contentPatterns = [
-      /<div[^>]*class=["'][^"']*(?:article-body|article-content|article__body|article__content|post-body|post-content|post__body|post__content|entry-content|entry-body|story-body|story-content|news-body|news-content)[^"']*["'][^>]*>([\s\S]*?)<\/div>/i,
-      /<div[^>]*class=["'][^"']*(?:content-body|main-content|page-content|text-content|body-content)[^"']*["'][^>]*>([\s\S]*?)<\/div>/i,
-      /<div[^>]*id=["'](?:article|content|main-content|story|post)[^"']*["'][^>]*>([\s\S]*?)<\/div>/i,
-      /<div[^>]*class=["'][^"']*(?:article-text|news-text|story-text|content-text)[^"']*["'][^>]*>([\s\S]*?)<\/div>/i,
-    ];
+  // Content container selectors
+  const contentSelectors = [
+    'article', 'main article', '[role="article"]',
+    '.article-body', '.article-content', '.article__body', '.article__content',
+    '.post-body', '.post-content', '.post__body', '.post__content',
+    '.entry-content', '.entry-body', '.story-body', '.story-content',
+    '.news-body', '.news-content', '.content-body', '.main-content',
+    '.article-text', '.news-text', '.story-text', '.content-text',
+    '.td-post-content', '.jeg_post_content', '.single-content',
+    '#article', '#content', '#main-content', '#story', '#post-content',
+    'main', '[role="main"]',
+  ];
 
-    for (const pattern of contentPatterns) {
-      const match = cleaned.match(pattern);
-      if (match?.[1] && match[1].length > 200) {
-        articleHtml = match[1];
+  let contentElement: Element | null = null;
+
+  for (const selector of contentSelectors) {
+    const el = doc.querySelector(selector);
+    if (el) {
+      const text = el.textContent || '';
+      if (text.length > 200) {
+        contentElement = el as Element;
+        defaultQuality.hasProperStructure = true;
         break;
       }
     }
   }
 
-  // Strategy 3: Look for <main> tag
-  if (!articleHtml) {
-    const mainMatch = cleaned.match(/<main[^>]*>([\s\S]*?)<\/main>/i);
-    if (mainMatch?.[1]) {
-      articleHtml = mainMatch[1];
-    }
-  }
-
-  // Strategy 4: Find the div with the most paragraph tags (heuristic)
-  if (!articleHtml) {
-    const divMatches = cleaned.matchAll(/<div[^>]*>([\s\S]*?)<\/div>/gi);
-    let bestContent = '';
-    let maxParagraphs = 0;
-
-    for (const match of divMatches) {
-      const content = match[1];
-      const paragraphCount = (content.match(/<p[^>]*>/gi) || []).length;
-      const contentLength = content.replace(/<[^>]*>/g, '').length;
-
-      if (paragraphCount > maxParagraphs && contentLength > 500) {
-        maxParagraphs = paragraphCount;
-        bestContent = content;
+  // Fallback: find div with most paragraphs
+  if (!contentElement) {
+    const divs = doc.querySelectorAll('div');
+    let maxScore = 0;
+    for (const div of divs) {
+      const paragraphs = div.querySelectorAll('p');
+      const textLength = (div.textContent || '').length;
+      const score = paragraphs.length * 100 + textLength;
+      if (score > maxScore && paragraphs.length >= 2 && textLength > 300) {
+        maxScore = score;
+        contentElement = div as Element;
       }
     }
-
-    if (bestContent && maxParagraphs >= 3) {
-      articleHtml = bestContent;
-    }
   }
 
-  if (!articleHtml) {
-    return null;
+  if (!contentElement) {
+    return { content: null, quality: defaultQuality };
   }
 
-  // Step 3: Extract and clean paragraphs
+  // Extract paragraphs
   const paragraphs: string[] = [];
+  const pElements = contentElement.querySelectorAll('p');
 
-  const pMatches = articleHtml.matchAll(/<p[^>]*>([\s\S]*?)<\/p>/gi);
-  for (const match of pMatches) {
-    const text = cleanHtmlToText(match[1]);
-    if (text.length > 40) {
-      paragraphs.push(text);
+  for (const p of pElements) {
+    const text = cleanText(p.textContent || '');
+    if (text.length < 40) continue;
+    if (isBoilerplate(text)) continue;
+    paragraphs.push(text);
+  }
+
+  // Fallback for non-paragraph content
+  if (paragraphs.length < 2) {
+    const allText = cleanText(contentElement.textContent || '');
+    if (allText.length >= 300 && !isBoilerplate(allText)) {
+      const sentences = allText.split(/(?<=[.!?،。])\s+/);
+      let currentParagraph = '';
+      for (const sentence of sentences) {
+        currentParagraph += sentence + ' ';
+        if (currentParagraph.length >= 150) {
+          paragraphs.push(currentParagraph.trim());
+          currentParagraph = '';
+        }
+      }
+      if (currentParagraph.trim().length > 40) {
+        paragraphs.push(currentParagraph.trim());
+      }
     }
   }
 
-  if (paragraphs.length >= 2) {
-    const fullContent = paragraphs.join('\n\n');
-    if (fullContent.length >= 300) {
-      return fullContent;
-    }
+  if (paragraphs.length === 0) {
+    return { content: null, quality: defaultQuality };
   }
 
-  // Fallback: if paragraphs extraction failed, try to get all text
-  const allText = cleanHtmlToText(articleHtml);
-  if (allText.length >= 300) {
-    return allText.replace(/\s{3,}/g, '\n\n').trim();
+  const fullContent = paragraphs.join('\n\n');
+  const quality: ContentQuality = {
+    paragraphCount: paragraphs.length,
+    avgParagraphLength: fullContent.length / paragraphs.length,
+    totalLength: fullContent.length,
+    hasProperStructure: defaultQuality.hasProperStructure,
+  };
+
+  if (fullContent.length < 200) {
+    return { content: null, quality };
   }
 
-  return null;
+  return { content: fullContent, quality };
 }
 
-// Clean HTML to readable text
-function cleanHtmlToText(html: string): string {
-  return html
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<[^>]*>/g, '')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&apos;/g, "'")
-    .replace(/&#x27;/g, "'")
-    .replace(/&laquo;/g, '«')
-    .replace(/&raquo;/g, '»')
-    .replace(/&ldquo;/g, '"')
-    .replace(/&rdquo;/g, '"')
-    .replace(/&lsquo;/g, ''')
-    .replace(/&rsquo;/g, ''')
-    .replace(/&ndash;/g, '–')
-    .replace(/&mdash;/g, '—')
-    .replace(/&hellip;/g, '...')
-    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(parseInt(code, 10)))
-    .replace(/&#x([0-9a-f]+);/gi, (_, code) => String.fromCharCode(parseInt(code, 16)))
-    .replace(/[ \t]+/g, ' ')
-    .replace(/\n\s*\n/g, '\n\n')
-    .trim();
-}
-
-// Fetch and extract full article content from webpage
-async function fetchArticleContent(url: string): Promise<string | null> {
+// Fetch and extract content from URL
+async function fetchArticleContent(url: string): Promise<{
+  content: string | null;
+  quality: number;
+  method: string;
+}> {
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 25000);
@@ -168,15 +247,36 @@ async function fetchArticleContent(url: string): Promise<string | null> {
     clearTimeout(timeoutId);
 
     if (!response.ok) {
-      console.log(`[backfill-content] HTTP ${response.status} for ${url}`);
-      return null;
+      return { content: null, quality: 0, method: 'failed' };
     }
 
     const html = await response.text();
-    return extractArticleContent(html);
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+
+    if (!doc) {
+      return { content: null, quality: 0, method: 'parse_failed' };
+    }
+
+    // Try JSON-LD first (most reliable)
+    const jsonLdContent = extractFromJsonLd(doc);
+    if (jsonLdContent && jsonLdContent.length >= 300) {
+      return { content: jsonLdContent, quality: 0.9, method: 'json-ld' };
+    }
+
+    // DOM-based extraction
+    const { content, quality } = extractArticleContentDOM(doc);
+    if (content) {
+      return {
+        content,
+        quality: calculateQualityScore(quality),
+        method: 'dom',
+      };
+    }
+
+    return { content: null, quality: 0, method: 'not_found' };
   } catch (error) {
-    console.error(`[backfill-content] Failed for ${url}:`, error.message || 'Unknown error');
-    return null;
+    console.error(`[backfill-content] Failed for ${url}:`, error.message);
+    return { content: null, quality: 0, method: 'error' };
   }
 }
 
@@ -195,20 +295,22 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Parse optional limit from request body (default 20)
+    // Parse options from request
     let limit = 20;
+    let minQuality = 0; // Minimum quality threshold
     try {
       const body = await req.json();
       if (body.limit) limit = Math.min(body.limit, 50);
+      if (body.min_quality) minQuality = body.min_quality;
     } catch {
-      // No body or invalid JSON, use default
+      // Use defaults
     }
 
-    // Get stories with null full_content
+    // Get stories with null or low-quality full_content
     const { data: stories, error: storiesError } = await supabase
       .from('stories')
-      .select('id, original_url')
-      .is('full_content', null)
+      .select('id, original_url, content_quality')
+      .or(`full_content.is.null,content_quality.lt.${minQuality}`)
       .not('original_url', 'is', null)
       .order('published_at', { ascending: false })
       .limit(limit);
@@ -226,7 +328,6 @@ serve(async (req) => {
 
     console.log(`[backfill-content] Processing ${stories.length} stories`);
 
-    // Process stories sequentially to avoid rate limiting
     const results: BackfillResult[] = [];
     let successCount = 0;
 
@@ -238,22 +339,28 @@ serve(async (req) => {
       };
 
       try {
-        const fullContent = await fetchArticleContent(story.original_url);
+        const { content, quality, method } = await fetchArticleContent(story.original_url);
 
-        if (fullContent) {
-          // Update the story with the found content
+        if (content && quality >= minQuality) {
           const { error: updateError } = await supabase
             .from('stories')
-            .update({ full_content: fullContent })
+            .update({
+              full_content: content,
+              content_quality: quality,
+            })
             .eq('id', story.id);
 
           if (updateError) {
             result.error = `Update failed: ${updateError.message}`;
           } else {
             result.content_found = true;
-            result.content_length = fullContent.length;
+            result.content_length = content.length;
+            result.content_quality = quality;
+            result.extraction_method = method;
             successCount++;
           }
+        } else {
+          result.extraction_method = method;
         }
       } catch (error) {
         result.error = error.message;
@@ -261,7 +368,7 @@ serve(async (req) => {
 
       results.push(result);
 
-      // Small delay between requests to be nice to servers
+      // Delay between requests
       await new Promise(resolve => setTimeout(resolve, 500));
     }
 
@@ -269,6 +376,9 @@ serve(async (req) => {
       total_processed: results.length,
       content_found: successCount,
       content_not_found: results.length - successCount,
+      avg_quality: successCount > 0
+        ? results.filter(r => r.content_quality).reduce((sum, r) => sum + (r.content_quality || 0), 0) / successCount
+        : 0,
     };
 
     console.log(`[backfill-content] Complete: ${successCount}/${results.length} articles extracted`);

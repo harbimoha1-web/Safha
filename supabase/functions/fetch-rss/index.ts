@@ -4,6 +4,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.89.0';
 import { parseFeed } from 'https://deno.land/x/rss@1.0.0/mod.ts';
+import { DOMParser, Element } from 'https://deno.land/x/deno_dom@v0.1.43/deno-dom-wasm.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -116,25 +117,77 @@ function extractImageUrl(item: any): string | null {
 interface WebpageData {
   imageUrl: string | null;
   fullContent: string | null;
+  contentQuality: number; // 0-1 score
+}
+
+// Content quality indicators
+interface ContentQuality {
+  paragraphCount: number;
+  avgParagraphLength: number;
+  totalLength: number;
+  hasProperStructure: boolean;
+}
+
+// Calculate content quality score (0-1)
+function calculateQualityScore(quality: ContentQuality): number {
+  let score = 0;
+
+  // Paragraph count (0-0.3)
+  if (quality.paragraphCount >= 5) score += 0.3;
+  else if (quality.paragraphCount >= 3) score += 0.2;
+  else if (quality.paragraphCount >= 2) score += 0.1;
+
+  // Average paragraph length (0-0.3)
+  if (quality.avgParagraphLength >= 100) score += 0.3;
+  else if (quality.avgParagraphLength >= 60) score += 0.2;
+  else if (quality.avgParagraphLength >= 40) score += 0.1;
+
+  // Total length (0-0.2)
+  if (quality.totalLength >= 1500) score += 0.2;
+  else if (quality.totalLength >= 800) score += 0.15;
+  else if (quality.totalLength >= 400) score += 0.1;
+
+  // Proper structure bonus (0-0.2)
+  if (quality.hasProperStructure) score += 0.2;
+
+  return Math.min(score, 1);
+}
+
+// Boilerplate phrases to filter out (English + Arabic)
+const BOILERPLATE_PATTERNS = [
+  /copyright|©|all rights reserved/i,
+  /subscribe|newsletter|sign up/i,
+  /share on|follow us|like us/i,
+  /read more|continue reading|click here/i,
+  /advertisement|sponsored|promoted/i,
+  /cookie|privacy policy|terms of/i,
+  /اشترك|تابعنا|شاركنا/i,
+  /حقوق النشر|جميع الحقوق محفوظة/i,
+  /اقرأ أيضا|مواضيع ذات صلة/i,
+];
+
+// Check if text is likely boilerplate
+function isBoilerplate(text: string): boolean {
+  const lowerText = text.toLowerCase();
+  return BOILERPLATE_PATTERNS.some(pattern => pattern.test(lowerText));
 }
 
 // Fetch webpage and extract both og:image and full article content
 async function fetchWebpageData(url: string): Promise<WebpageData> {
-  const result: WebpageData = { imageUrl: null, fullContent: null };
+  const result: WebpageData = { imageUrl: null, fullContent: null, contentQuality: 0 };
 
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 25000); // 25s timeout for slow sites
+    const timeoutId = setTimeout(() => controller.abort(), 25000);
 
     const response = await fetch(url, {
       signal: controller.signal,
       headers: {
-        // Use browser-like User-Agent to avoid being blocked
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.9,ar;q=0.8',
         'Accept-Encoding': 'gzip, deflate, br',
-        'Referer': url, // Some sites require this
+        'Referer': url,
         'Connection': 'keep-alive',
         'Cache-Control': 'no-cache',
       },
@@ -148,56 +201,31 @@ async function fetchWebpageData(url: string): Promise<WebpageData> {
 
     const html = await response.text();
 
-    // ========== EXTRACT IMAGE ==========
-    // Try og:image first - flexible regex handles whitespace variations
-    let ogImageMatch = html.match(/<meta[^>]*?property\s*=\s*["']?og:image["']?[^>]*?content\s*=\s*["']([^"']+)["']/i);
-    if (!ogImageMatch) {
-      ogImageMatch = html.match(/<meta[^>]*?content\s*=\s*["']([^"']+)["'][^>]*?property\s*=\s*["']?og:image["']?/i);
-    }
-    if (!ogImageMatch) {
-      ogImageMatch = html.match(/<meta[^>]*?itemprop\s*=\s*["']?image["']?[^>]*?content\s*=\s*["']([^"']+)["']/i);
-    }
-    if (ogImageMatch?.[1]) {
-      result.imageUrl = resolveImageUrl(ogImageMatch[1], url);
+    // Parse HTML with DOM parser
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    if (!doc) {
+      console.log(`[fetchWebpageData] Failed to parse HTML for ${url}`);
+      return result;
     }
 
-    // Try twitter:image if no og:image
-    if (!result.imageUrl) {
-      let twitterImageMatch = html.match(/<meta[^>]*?name\s*=\s*["']?twitter:image["']?[^>]*?content\s*=\s*["']([^"']+)["']/i);
-      if (!twitterImageMatch) {
-        twitterImageMatch = html.match(/<meta[^>]*?content\s*=\s*["']([^"']+)["'][^>]*?name\s*=\s*["']?twitter:image["']?/i);
-      }
-      if (twitterImageMatch?.[1]) {
-        result.imageUrl = resolveImageUrl(twitterImageMatch[1], url);
-      }
+    // ========== EXTRACT IMAGE (using DOM) ==========
+    result.imageUrl = extractImageFromDOM(doc, url);
+
+    // ========== EXTRACT CONTENT ==========
+    // Strategy 1: Try JSON-LD structured data first (most reliable)
+    const jsonLdContent = extractFromJsonLd(doc);
+    if (jsonLdContent && jsonLdContent.length >= 300) {
+      result.fullContent = jsonLdContent;
+      result.contentQuality = 0.9; // High confidence for structured data
+      return result;
     }
 
-    // Try link rel="image_src" (older sites)
-    if (!result.imageUrl) {
-      const linkImageMatch = html.match(/<link[^>]*?rel\s*=\s*["']?image_src["']?[^>]*?href\s*=\s*["']([^"']+)["']/i);
-      if (linkImageMatch?.[1]) {
-        result.imageUrl = resolveImageUrl(linkImageMatch[1], url);
-      }
+    // Strategy 2: DOM-based extraction with quality scoring
+    const { content, quality } = extractArticleContentDOM(doc);
+    if (content) {
+      result.fullContent = content;
+      result.contentQuality = calculateQualityScore(quality);
     }
-
-    // Try first image in article
-    if (!result.imageUrl) {
-      const articleImgMatch = html.match(/<(?:article|main|div[^>]*class=["'][^"']*(?:content|article|post|entry)[^"']*["'])[^>]*>[\s\S]*?<img[^>]+src=["']([^"']+)["']/i);
-      if (articleImgMatch?.[1]) {
-        result.imageUrl = resolveImageUrl(articleImgMatch[1], url);
-      }
-    }
-
-    // Last resort: any reasonably-sized image
-    if (!result.imageUrl) {
-      const anyImgMatch = html.match(/<img[^>]+src=["']([^"']+(?:jpg|jpeg|png|webp)[^"']*)["']/i);
-      if (anyImgMatch?.[1]) {
-        result.imageUrl = resolveImageUrl(anyImgMatch[1], url);
-      }
-    }
-
-    // ========== EXTRACT FULL ARTICLE CONTENT ==========
-    result.fullContent = extractArticleContent(html);
 
     return result;
   } catch (error) {
@@ -206,163 +234,254 @@ async function fetchWebpageData(url: string): Promise<WebpageData> {
   }
 }
 
-// Extract article content from HTML using multiple strategies
-function extractArticleContent(html: string): string | null {
-  // Step 1: Remove unwanted elements (scripts, styles, nav, etc.)
-  let cleaned = html
-    // Remove script tags and content
-    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-    // Remove style tags and content
-    .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
-    // Remove nav elements
-    .replace(/<nav\b[^<]*(?:(?!<\/nav>)<[^<]*)*<\/nav>/gi, '')
-    // Remove header elements (site header, not article headers)
-    .replace(/<header\b[^>]*class=["'][^"']*(?:site|main|page|global)[^"']*["'][^<]*(?:(?!<\/header>)<[^<]*)*<\/header>/gi, '')
-    // Remove footer elements
-    .replace(/<footer\b[^<]*(?:(?!<\/footer>)<[^<]*)*<\/footer>/gi, '')
-    // Remove aside elements (sidebars)
-    .replace(/<aside\b[^<]*(?:(?!<\/aside>)<[^<]*)*<\/aside>/gi, '')
-    // Remove common ad/promo divs
-    .replace(/<div[^>]*class=["'][^"']*(?:ad-|ads-|advert|promo|banner|sidebar|related|comment|share|social|newsletter|popup|modal)[^"']*["'][^<]*(?:(?!<\/div>)<[^<]*)*<\/div>/gi, '')
-    // Remove HTML comments
-    .replace(/<!--[\s\S]*?-->/g, '');
-
-  // Step 2: Try to find the main article content using various strategies
-  let articleHtml: string | null = null;
-
-  // Strategy 1: Look for <article> tag (most semantic)
-  const articleTagMatch = cleaned.match(/<article[^>]*>([\s\S]*?)<\/article>/i);
-  if (articleTagMatch?.[1]) {
-    articleHtml = articleTagMatch[1];
+// Extract image URL using DOM parsing
+function extractImageFromDOM(doc: Document, baseUrl: string): string | null {
+  // 1. og:image meta tag
+  const ogImage = doc.querySelector('meta[property="og:image"]');
+  if (ogImage) {
+    const content = ogImage.getAttribute('content');
+    if (content) return resolveImageUrl(content, baseUrl);
   }
 
-  // Strategy 2: Look for common article content class names
-  if (!articleHtml) {
-    const contentPatterns = [
-      // Common article body classes
-      /<div[^>]*class=["'][^"']*(?:article-body|article-content|article__body|article__content|post-body|post-content|post__body|post__content|entry-content|entry-body|story-body|story-content|news-body|news-content)[^"']*["'][^>]*>([\s\S]*?)<\/div>/i,
-      // Generic content classes
-      /<div[^>]*class=["'][^"']*(?:content-body|main-content|page-content|text-content|body-content)[^"']*["'][^>]*>([\s\S]*?)<\/div>/i,
-      // ID-based selectors
-      /<div[^>]*id=["'](?:article|content|main-content|story|post)[^"']*["'][^>]*>([\s\S]*?)<\/div>/i,
-      // Arabic news site patterns
-      /<div[^>]*class=["'][^"']*(?:article-text|news-text|story-text|content-text)[^"']*["'][^>]*>([\s\S]*?)<\/div>/i,
-    ];
+  // 2. twitter:image meta tag
+  const twitterImage = doc.querySelector('meta[name="twitter:image"]');
+  if (twitterImage) {
+    const content = twitterImage.getAttribute('content');
+    if (content) return resolveImageUrl(content, baseUrl);
+  }
 
-    for (const pattern of contentPatterns) {
-      const match = cleaned.match(pattern);
-      if (match?.[1] && match[1].length > 200) {
-        articleHtml = match[1];
+  // 3. Schema.org image
+  const schemaImage = doc.querySelector('meta[itemprop="image"]');
+  if (schemaImage) {
+    const content = schemaImage.getAttribute('content');
+    if (content) return resolveImageUrl(content, baseUrl);
+  }
+
+  // 4. link rel="image_src"
+  const linkImage = doc.querySelector('link[rel="image_src"]');
+  if (linkImage) {
+    const href = linkImage.getAttribute('href');
+    if (href) return resolveImageUrl(href, baseUrl);
+  }
+
+  // 5. First image in article/main
+  const articleImg = doc.querySelector('article img, main img, .article-content img, .post-content img');
+  if (articleImg) {
+    const src = articleImg.getAttribute('src');
+    if (src) return resolveImageUrl(src, baseUrl);
+  }
+
+  // 6. Any large image (check for dimensions in attributes)
+  const images = doc.querySelectorAll('img[src]');
+  for (const img of images) {
+    const src = img.getAttribute('src') || '';
+    const width = parseInt(img.getAttribute('width') || '0', 10);
+    const height = parseInt(img.getAttribute('height') || '0', 10);
+
+    // Skip small images (icons, avatars)
+    if (width > 200 || height > 200 || /\.(jpg|jpeg|png|webp)/i.test(src)) {
+      // Skip common non-content images
+      if (!/logo|icon|avatar|button|banner|ad/i.test(src)) {
+        return resolveImageUrl(src, baseUrl);
+      }
+    }
+  }
+
+  return null;
+}
+
+// Extract article text from JSON-LD structured data
+function extractFromJsonLd(doc: Document): string | null {
+  const scripts = doc.querySelectorAll('script[type="application/ld+json"]');
+
+  for (const script of scripts) {
+    try {
+      const json = JSON.parse(script.textContent || '');
+      const items = Array.isArray(json) ? json : [json];
+
+      for (const item of items) {
+        // Check for NewsArticle, Article, or BlogPosting schema
+        if (['NewsArticle', 'Article', 'BlogPosting', 'WebPage'].includes(item['@type'])) {
+          // articleBody is the full text
+          if (item.articleBody && typeof item.articleBody === 'string') {
+            return cleanText(item.articleBody);
+          }
+          // Some sites use text instead
+          if (item.text && typeof item.text === 'string') {
+            return cleanText(item.text);
+          }
+          // description as fallback (usually shorter)
+          if (item.description && typeof item.description === 'string' && item.description.length > 300) {
+            return cleanText(item.description);
+          }
+        }
+      }
+    } catch {
+      // Invalid JSON, continue to next script
+    }
+  }
+
+  return null;
+}
+
+// Extract article content using DOM with quality metrics
+function extractArticleContentDOM(doc: Document): { content: string | null; quality: ContentQuality } {
+  const defaultQuality: ContentQuality = {
+    paragraphCount: 0,
+    avgParagraphLength: 0,
+    totalLength: 0,
+    hasProperStructure: false,
+  };
+
+  // Remove unwanted elements
+  const unwantedSelectors = [
+    'script', 'style', 'nav', 'footer', 'aside', 'header',
+    '.ad', '.ads', '.advertisement', '.promo', '.banner',
+    '.sidebar', '.related', '.comments', '.share', '.social',
+    '.newsletter', '.popup', '.modal', '[role="navigation"]',
+    '.breadcrumb', '.pagination', '.author-bio', '.tags',
+  ];
+
+  for (const selector of unwantedSelectors) {
+    const elements = doc.querySelectorAll(selector);
+    for (const el of elements) {
+      el.remove();
+    }
+  }
+
+  // Content container selectors (ordered by specificity)
+  const contentSelectors = [
+    // Semantic HTML5
+    'article',
+    'main article',
+    '[role="article"]',
+    // Common class patterns (English)
+    '.article-body', '.article-content', '.article__body', '.article__content',
+    '.post-body', '.post-content', '.post__body', '.post__content',
+    '.entry-content', '.entry-body', '.story-body', '.story-content',
+    '.news-body', '.news-content', '.content-body', '.main-content',
+    // Arabic news sites specific
+    '.article-text', '.news-text', '.story-text', '.content-text',
+    '.td-post-content', '.jeg_post_content', '.single-content',
+    // ID-based
+    '#article', '#content', '#main-content', '#story', '#post-content',
+    // Fallback
+    'main', '[role="main"]',
+  ];
+
+  let contentElement: Element | null = null;
+
+  for (const selector of contentSelectors) {
+    const el = doc.querySelector(selector);
+    if (el) {
+      // Check if it has meaningful content
+      const text = el.textContent || '';
+      if (text.length > 200) {
+        contentElement = el as Element;
+        defaultQuality.hasProperStructure = true;
         break;
       }
     }
   }
 
-  // Strategy 3: Look for <main> tag
-  if (!articleHtml) {
-    const mainMatch = cleaned.match(/<main[^>]*>([\s\S]*?)<\/main>/i);
-    if (mainMatch?.[1]) {
-      articleHtml = mainMatch[1];
-    }
-  }
+  // Fallback: find div with most paragraphs
+  if (!contentElement) {
+    const divs = doc.querySelectorAll('div');
+    let maxScore = 0;
 
-  // Strategy 4: Find the div with the most paragraph tags (heuristic)
-  if (!articleHtml) {
-    // Find all substantial divs
-    const divMatches = cleaned.matchAll(/<div[^>]*>([\s\S]*?)<\/div>/gi);
-    let bestContent = '';
-    let maxParagraphs = 0;
+    for (const div of divs) {
+      const paragraphs = div.querySelectorAll('p');
+      const textLength = (div.textContent || '').length;
+      const score = paragraphs.length * 100 + textLength;
 
-    for (const match of divMatches) {
-      const content = match[1];
-      const paragraphCount = (content.match(/<p[^>]*>/gi) || []).length;
-      const contentLength = content.replace(/<[^>]*>/g, '').length;
-
-      // Must have multiple paragraphs and substantial content
-      if (paragraphCount > maxParagraphs && contentLength > 500) {
-        maxParagraphs = paragraphCount;
-        bestContent = content;
+      if (score > maxScore && paragraphs.length >= 2 && textLength > 300) {
+        maxScore = score;
+        contentElement = div as Element;
       }
     }
-
-    if (bestContent && maxParagraphs >= 3) {
-      articleHtml = bestContent;
-    }
   }
 
-  if (!articleHtml) {
-    console.log('[extractArticleContent] Could not find article content');
-    return null;
+  if (!contentElement) {
+    console.log('[extractArticleContentDOM] No content container found');
+    return { content: null, quality: defaultQuality };
   }
 
-  // Step 3: Extract and clean paragraphs
+  // Extract paragraphs
   const paragraphs: string[] = [];
+  const pElements = contentElement.querySelectorAll('p');
 
-  // Extract <p> tags
-  const pMatches = articleHtml.matchAll(/<p[^>]*>([\s\S]*?)<\/p>/gi);
-  for (const match of pMatches) {
-    const text = cleanHtmlToText(match[1]);
-    // Filter out short snippets (likely captions, metadata)
-    if (text.length > 40) {
-      paragraphs.push(text);
+  for (const p of pElements) {
+    const text = cleanText(p.textContent || '');
+
+    // Skip short paragraphs (likely captions, metadata)
+    if (text.length < 40) continue;
+
+    // Skip boilerplate content
+    if (isBoilerplate(text)) continue;
+
+    paragraphs.push(text);
+  }
+
+  // If not enough paragraphs, try getting all text content
+  if (paragraphs.length < 2) {
+    const allText = cleanText(contentElement.textContent || '');
+    if (allText.length >= 300 && !isBoilerplate(allText)) {
+      // Split into paragraphs by sentence groups
+      const sentences = allText.split(/(?<=[.!?،。])\s+/);
+      let currentParagraph = '';
+
+      for (const sentence of sentences) {
+        currentParagraph += sentence + ' ';
+        if (currentParagraph.length >= 150) {
+          paragraphs.push(currentParagraph.trim());
+          currentParagraph = '';
+        }
+      }
+      if (currentParagraph.trim().length > 40) {
+        paragraphs.push(currentParagraph.trim());
+      }
     }
   }
 
-  // If we got meaningful paragraphs, join them
-  if (paragraphs.length >= 2) {
-    const fullContent = paragraphs.join('\n\n');
-    // Validate we have substantial content (at least 300 chars)
-    if (fullContent.length >= 300) {
-      return fullContent;
-    }
+  if (paragraphs.length === 0) {
+    console.log('[extractArticleContentDOM] No valid paragraphs found');
+    return { content: null, quality: defaultQuality };
   }
 
-  // Fallback: if paragraphs extraction failed, try to get all text
-  const allText = cleanHtmlToText(articleHtml);
-  if (allText.length >= 300) {
-    // Split into paragraphs by double newlines or long gaps
-    return allText.replace(/\s{3,}/g, '\n\n').trim();
+  const fullContent = paragraphs.join('\n\n');
+
+  // Calculate quality metrics
+  const quality: ContentQuality = {
+    paragraphCount: paragraphs.length,
+    avgParagraphLength: fullContent.length / paragraphs.length,
+    totalLength: fullContent.length,
+    hasProperStructure: defaultQuality.hasProperStructure,
+  };
+
+  // Final validation
+  if (fullContent.length < 200) {
+    console.log('[extractArticleContentDOM] Content too short');
+    return { content: null, quality };
   }
 
-  console.log('[extractArticleContent] Content too short or invalid');
-  return null;
+  return { content: fullContent, quality };
 }
 
-// Clean HTML to readable text, preserving some structure
-function cleanHtmlToText(html: string): string {
-  return html
-    // Convert <br> to newlines
-    .replace(/<br\s*\/?>/gi, '\n')
-    // Remove remaining HTML tags
-    .replace(/<[^>]*>/g, '')
-    // Decode common HTML entities
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&apos;/g, "'")
-    .replace(/&#x27;/g, "'")
-    .replace(/&laquo;/g, '«')
-    .replace(/&raquo;/g, '»')
-    .replace(/&ldquo;/g, '"')
-    .replace(/&rdquo;/g, '"')
-    .replace(/&lsquo;/g, ''')
-    .replace(/&rsquo;/g, ''')
-    .replace(/&ndash;/g, '–')
-    .replace(/&mdash;/g, '—')
-    .replace(/&hellip;/g, '...')
-    // Decode numeric entities
-    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(parseInt(code, 10)))
-    .replace(/&#x([0-9a-f]+);/gi, (_, code) => String.fromCharCode(parseInt(code, 16)))
+// Clean text content
+function cleanText(text: string): string {
+  return text
     // Normalize whitespace
-    .replace(/[ \t]+/g, ' ')
+    .replace(/[\t\r]+/g, ' ')
     .replace(/\n\s*\n/g, '\n\n')
+    .replace(/  +/g, ' ')
+    // Trim each line
+    .split('\n')
+    .map(line => line.trim())
+    .join('\n')
     .trim();
 }
 
-// Legacy function for backward compatibility (calls fetchWebpageData internally)
+// Legacy function for backward compatibility
 async function fetchOgImage(url: string): Promise<string | null> {
   const data = await fetchWebpageData(url);
   return data.imageUrl;
@@ -486,14 +605,16 @@ async function fetchRSSSource(
 
       // Fetch webpage data (image fallback + full article content)
       let fullContent: string | null = null;
+      let contentQuality = 0;
       if (url) {
         const webpageData = await fetchWebpageData(url);
         // Use webpage image if RSS didn't provide one
         if (!imageUrl && webpageData.imageUrl) {
           imageUrl = webpageData.imageUrl;
         }
-        // Store full article content
+        // Store full article content and quality score
         fullContent = webpageData.fullContent;
+        contentQuality = webpageData.contentQuality;
       }
 
       // Final validation: ensure URL is absolute, discard invalid URLs
@@ -524,6 +645,7 @@ async function fetchRSSSource(
           original_content: stripHtml(content),
           original_description: stripHtml(description),
           full_content: fullContent,
+          content_quality: contentQuality,
           author,
           image_url: imageUrl,
           video_url: videoInfo?.url || null,

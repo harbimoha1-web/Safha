@@ -17,6 +17,7 @@ interface RawArticle {
   original_content: string;
   original_description: string;
   full_content: string | null;
+  content_quality: number | null;
   image_url: string | null;
   published_at: string | null;
   rss_source: {
@@ -187,6 +188,7 @@ async function processArticle(
         summary_ar: summary.summary_ar,
         summary_en: summary.summary_en,
         full_content: article.full_content,
+        content_quality: article.content_quality || 0,
         why_it_matters_ar: summary.why_it_matters_ar,
         why_it_matters_en: summary.why_it_matters_en,
         ai_quality_score: summary.quality_score,
