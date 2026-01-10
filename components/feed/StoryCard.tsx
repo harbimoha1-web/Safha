@@ -15,6 +15,9 @@ import type { Story, Language } from '@/types';
 import { HapticFeedback } from '@/lib/haptics';
 import { useTheme } from '@/contexts/ThemeContext';
 import { ActionSheet, ActionSheetOption } from '@/components/ActionSheet';
+import { TopicFallback } from './TopicFallback';
+import { VideoPlayer } from './VideoPlayer';
+import { getOptimizedImageUrl } from '@/lib/image';
 
 const { width, height } = Dimensions.get('window');
 
@@ -35,6 +38,28 @@ export function StoryCard({ story, isActive, language, isSaved, onSave, onShare,
   const summary = isArabic ? story.summary_ar : story.summary_en;
   const whyItMatters = isArabic ? story.why_it_matters_ar : story.why_it_matters_en;
   const [showActionSheet, setShowActionSheet] = useState(false);
+  const [imageError, setImageError] = useState(false);
+  const [imageLoaded, setImageLoaded] = useState(false);
+
+  // Get optimized image URL (uses screen dimensions and DPR automatically)
+  const optimizedImageUrl = getOptimizedImageUrl(story.image_url);
+  const hasValidImage = optimizedImageUrl && !imageError;
+
+  // Check for video content (only MP4 supported)
+  const hasVideo = !!story.video_url && story.video_type === 'mp4';
+
+  // Get topic slug for fallback styling
+  const topicSlug = story.topics?.[0]?.slug;
+
+  // Handle image load success
+  const handleImageLoad = useCallback(() => {
+    setImageLoaded(true);
+  }, []);
+
+  // Handle image load error
+  const handleImageError = useCallback(() => {
+    setImageError(true);
+  }, []);
 
   const handleSave = useCallback(() => {
     HapticFeedback.saveStory();
@@ -95,20 +120,105 @@ export function StoryCard({ story, isActive, language, isSaved, onSave, onShare,
 
   return (
     <View style={styles.container}>
-      <ImageBackground
-        source={{ uri: story.image_url || 'https://via.placeholder.com/800x1200' }}
-        style={styles.backgroundImage}
-        resizeMode="cover"
-        accessible={true}
-        accessibilityLabel={title || undefined}
-      >
-        {/* Gradient Overlay */}
-        <LinearGradient
-          colors={colors.cardGradient}
-          locations={[0, 0.5, 1]}
-          style={styles.gradient}
-          pointerEvents="box-none"
-        >
+      {/* Background: Video, optimized image, or topic fallback */}
+      {hasVideo ? (
+        /* Video player for stories with MP4 videos */
+        <View style={styles.videoContainer}>
+          <VideoPlayer
+            uri={story.video_url!}
+            poster={optimizedImageUrl || undefined}
+            isActive={isActive}
+          />
+          {/* Content overlay on video */}
+          <LinearGradient
+            colors={['transparent', 'rgba(0,0,0,0.4)', 'rgba(0,0,0,0.9)']}
+            locations={[0, 0.5, 1]}
+            style={styles.videoGradient}
+            pointerEvents="box-none"
+          >
+            <View style={styles.content}>
+              {story.source && (
+                <View style={styles.sourceBadge}>
+                  <Text style={styles.sourceText}>{story.source.name}</Text>
+                </View>
+              )}
+              <Text
+                style={[styles.title, isArabic && styles.arabicText]}
+                numberOfLines={3}
+              >
+                {title}
+              </Text>
+              <Text
+                style={[styles.summary, isArabic && styles.arabicText]}
+                numberOfLines={3}
+              >
+                {summary}
+              </Text>
+              <TouchableOpacity
+                style={styles.readMoreButton}
+                onPress={handleReadMore}
+                accessibilityRole="button"
+                accessibilityLabel={isArabic ? 'اقرأ المزيد' : 'Read more'}
+              >
+                <Text style={styles.readMoreText}>
+                  {isArabic ? 'اقرأ المزيد' : 'Read More'}
+                </Text>
+                <FontAwesome
+                  name={isArabic ? 'arrow-left' : 'arrow-right'}
+                  size={14}
+                  color="#fff"
+                />
+              </TouchableOpacity>
+            </View>
+            {/* Side Actions */}
+            <View style={styles.sideActions} pointerEvents="box-none">
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={handleSave}
+                activeOpacity={0.7}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <FontAwesome name={isSaved ? "bookmark" : "bookmark-o"} size={28} color="#fff" />
+                <Text style={styles.actionCount}>{formatCount(story.save_count)}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={handleShare}
+                activeOpacity={0.7}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <FontAwesome name="share" size={28} color="#fff" />
+                <Text style={styles.actionCount}>{formatCount(story.share_count)}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={handleOpenMenu}
+                activeOpacity={0.7}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <FontAwesome name="ellipsis-v" size={24} color="#fff" />
+              </TouchableOpacity>
+            </View>
+          </LinearGradient>
+        </View>
+      ) : hasValidImage ? (
+        <View style={styles.imageContainer}>
+          <ImageBackground
+            source={{ uri: optimizedImageUrl }}
+            style={styles.backgroundImage}
+            resizeMode="cover"
+            accessible={true}
+            accessibilityLabel={title || undefined}
+            onLoad={handleImageLoad}
+            onError={handleImageError}
+          >
+            {/* Gradient Overlay */}
+            <LinearGradient
+              colors={colors.cardGradient}
+              locations={[0, 0.5, 1]}
+              style={styles.gradient}
+              pointerEvents="box-none"
+            >
           {/* Content */}
           <View style={styles.content}>
             {/* Source Badge */}
@@ -225,7 +335,130 @@ export function StoryCard({ story, isActive, language, isSaved, onSave, onShare,
             </TouchableOpacity>
           </View>
         </LinearGradient>
-      </ImageBackground>
+          </ImageBackground>
+        </View>
+      ) : (
+        /* Fallback when no image available */
+        <View style={styles.fallbackContainer}>
+          <TopicFallback topicSlug={topicSlug} sourceName={story.source?.name} />
+          {/* Content overlay on fallback */}
+          <LinearGradient
+            colors={['transparent', 'rgba(0,0,0,0.3)', 'rgba(0,0,0,0.85)']}
+            locations={[0, 0.4, 1]}
+            style={styles.fallbackGradient}
+            pointerEvents="box-none"
+          >
+            {/* Content */}
+            <View style={styles.content}>
+              {/* Title */}
+              <Text
+                style={[styles.title, isArabic && styles.arabicText]}
+                numberOfLines={3}
+              >
+                {title}
+              </Text>
+
+              {/* Summary */}
+              <Text
+                style={[styles.summary, isArabic && styles.arabicText]}
+                numberOfLines={4}
+              >
+                {summary}
+              </Text>
+
+              {/* Why It Matters Section */}
+              {whyItMatters && (
+                <LinearGradient
+                  colors={['rgba(168,85,247,0.25)', 'rgba(0,122,255,0.18)']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.whyItMattersContainer}
+                >
+                  <View
+                    accessible={true}
+                    accessibilityLabel={isArabic ? `لماذا يهمك: ${whyItMatters}` : `Why it matters: ${whyItMatters}`}
+                  >
+                    <View style={[styles.whyItMattersHeader, isArabic && styles.whyItMattersHeaderRtl]}>
+                      <View style={styles.aiBadge}>
+                        <FontAwesome name="magic" size={10} color="#fff" />
+                        <Text style={styles.aiBadgeText}>AI</Text>
+                      </View>
+                      <Text style={[styles.whyItMattersLabel, isArabic && styles.arabicText]}>
+                        {isArabic ? 'لماذا يهمك؟' : 'Why it matters'}
+                      </Text>
+                    </View>
+                    <Text
+                      style={[styles.whyItMattersText, isArabic && styles.arabicText]}
+                      numberOfLines={2}
+                    >
+                      {whyItMatters}
+                    </Text>
+                  </View>
+                </LinearGradient>
+              )}
+
+              {/* Read More Button */}
+              <TouchableOpacity
+                style={styles.readMoreButton}
+                onPress={handleReadMore}
+                accessibilityRole="button"
+                accessibilityLabel={isArabic ? 'اقرأ المزيد' : 'Read more'}
+              >
+                <Text style={styles.readMoreText}>
+                  {isArabic ? 'اقرأ المزيد' : 'Read More'}
+                </Text>
+                <FontAwesome
+                  name={isArabic ? 'arrow-left' : 'arrow-right'}
+                  size={14}
+                  color="#fff"
+                />
+              </TouchableOpacity>
+            </View>
+
+            {/* Side Actions */}
+            <View style={styles.sideActions} pointerEvents="box-none">
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={handleSave}
+                activeOpacity={0.7}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                accessibilityRole="button"
+                accessibilityLabel={isSaved ? (isArabic ? 'إزالة الإشارة المرجعية' : 'Remove bookmark') : (isArabic ? 'حفظ الخبر' : 'Save story')}
+              >
+                <FontAwesome name={isSaved ? "bookmark" : "bookmark-o"} size={28} color="#fff" />
+                <Text style={styles.actionCount}>
+                  {formatCount(story.save_count)}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={handleShare}
+                activeOpacity={0.7}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                accessibilityRole="button"
+                accessibilityLabel={isArabic ? 'مشاركة الخبر' : 'Share story'}
+              >
+                <FontAwesome name="share" size={28} color="#fff" />
+                <Text style={styles.actionCount}>
+                  {formatCount(story.share_count)}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={handleOpenMenu}
+                activeOpacity={0.7}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                accessibilityRole="button"
+                accessibilityLabel={isArabic ? 'المزيد من الخيارات' : 'More options'}
+              >
+                <FontAwesome name="ellipsis-v" size={24} color="#fff" />
+              </TouchableOpacity>
+            </View>
+          </LinearGradient>
+        </View>
+      )}
 
       {/* Action Sheet */}
       <ActionSheet
@@ -245,10 +478,35 @@ const styles = StyleSheet.create({
     width,
     height,
   },
+  imageContainer: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+  },
   backgroundImage: {
     flex: 1,
     width: '100%',
     height: '100%',
+  },
+  videoContainer: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+  },
+  videoGradient: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'flex-end',
+    paddingBottom: 100,
+  },
+  fallbackContainer: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+  },
+  fallbackGradient: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'flex-end',
+    paddingBottom: 100,
   },
   gradient: {
     flex: 1,

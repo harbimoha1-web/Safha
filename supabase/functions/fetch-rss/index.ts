@@ -18,6 +18,7 @@ interface RSSSource {
   reliability_score: number;
   fetch_interval_minutes: number;
   last_fetched_at: string | null;
+  error_count: number;
 }
 
 interface FetchResult {
@@ -39,21 +40,143 @@ async function generateContentHash(content: string): Promise<string> {
 
 // Extract image URL from RSS item
 function extractImageUrl(item: any): string | null {
-  // Try various common image fields
+  // 1. Enclosure with image MIME type
   if (item.enclosure?.url && item.enclosure.type?.startsWith('image/')) {
     return item.enclosure.url;
   }
-  if (item['media:content']?.url) {
-    return item['media:content'].url;
+
+  // 2. Media content (handle both object and array)
+  const mediaContent = item['media:content'];
+  if (mediaContent) {
+    const url = Array.isArray(mediaContent)
+      ? mediaContent[0]?.url
+      : mediaContent.url;
+    if (url) return url;
   }
-  if (item['media:thumbnail']?.url) {
-    return item['media:thumbnail'].url;
+
+  // 3. Media thumbnail (handle both object and array)
+  const mediaThumbnail = item['media:thumbnail'];
+  if (mediaThumbnail) {
+    const url = Array.isArray(mediaThumbnail)
+      ? mediaThumbnail[0]?.url
+      : mediaThumbnail.url;
+    if (url) return url;
   }
-  // Try to extract from content
+
+  // 4. Direct image property
+  if (item.image?.url) return item.image.url;
+  if (typeof item.image === 'string') return item.image;
+
+  // 5. iTunes image (podcast feeds)
+  if (item['itunes:image']?.href) return item['itunes:image'].href;
+
+  // 6. Try to extract from content HTML
   if (item.content?.value) {
     const imgMatch = item.content.value.match(/<img[^>]+src=["']([^"']+)["']/i);
     if (imgMatch) return imgMatch[1];
   }
+
+  // 7. Try to extract from description HTML (many feeds use this)
+  if (item.description?.value) {
+    const imgMatch = item.description.value.match(/<img[^>]+src=["']([^"']+)["']/i);
+    if (imgMatch) return imgMatch[1];
+  }
+  if (typeof item.description === 'string') {
+    const imgMatch = item.description.match(/<img[^>]+src=["']([^"']+)["']/i);
+    if (imgMatch) return imgMatch[1];
+  }
+
+  return null;
+}
+
+// Fetch og:image from the actual webpage (fallback when RSS has no image)
+async function fetchOgImage(url: string): Promise<string | null> {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'Safha News Aggregator/1.0',
+        'Accept': 'text/html',
+      },
+    });
+    clearTimeout(timeoutId);
+
+    if (!response.ok) return null;
+
+    const html = await response.text();
+
+    // Try og:image first (most reliable)
+    const ogImageMatch = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)
+      || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i);
+    if (ogImageMatch?.[1]) {
+      return ogImageMatch[1];
+    }
+
+    // Try twitter:image
+    const twitterImageMatch = html.match(/<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i)
+      || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']twitter:image["']/i);
+    if (twitterImageMatch?.[1]) {
+      return twitterImageMatch[1];
+    }
+
+    // Try first large image in article (min 300px wide to avoid icons)
+    const articleImgMatch = html.match(/<article[^>]*>[\s\S]*?<img[^>]+src=["']([^"']+)["']/i);
+    if (articleImgMatch?.[1]) {
+      return articleImgMatch[1];
+    }
+
+    return null;
+  } catch {
+    // Timeout or fetch error - just return null
+    return null;
+  }
+}
+
+// Extract video URL from RSS item
+function extractVideoUrl(item: any): { url: string; type: string } | null {
+  // Check enclosure for video
+  if (item.enclosure?.url && item.enclosure.type?.startsWith('video/')) {
+    return { url: item.enclosure.url, type: 'mp4' };
+  }
+
+  // Check media:content for video
+  if (item['media:content']?.medium === 'video' && item['media:content'].url) {
+    return { url: item['media:content'].url, type: 'mp4' };
+  }
+
+  // Check for video in media:group
+  if (item['media:group']?.['media:content']) {
+    const mediaContent = item['media:group']['media:content'];
+    const videoContent = Array.isArray(mediaContent)
+      ? mediaContent.find((m: any) => m.medium === 'video' || m.type?.startsWith('video/'))
+      : (mediaContent.medium === 'video' || mediaContent.type?.startsWith('video/')) ? mediaContent : null;
+    if (videoContent?.url) {
+      return { url: videoContent.url, type: 'mp4' };
+    }
+  }
+
+  // Check for YouTube embeds in content
+  if (item.content?.value) {
+    // YouTube embed URL
+    const ytEmbedMatch = item.content.value.match(/youtube\.com\/embed\/([^"&?\s]+)/);
+    if (ytEmbedMatch) {
+      return { url: `https://www.youtube.com/watch?v=${ytEmbedMatch[1]}`, type: 'youtube' };
+    }
+    // YouTube watch URL
+    const ytWatchMatch = item.content.value.match(/youtube\.com\/watch\?v=([^"&\s]+)/);
+    if (ytWatchMatch) {
+      return { url: `https://www.youtube.com/watch?v=${ytWatchMatch[1]}`, type: 'youtube' };
+    }
+    // Vimeo embed
+    const vimeoMatch = item.content.value.match(/vimeo\.com\/(?:video\/)?(\d+)/);
+    if (vimeoMatch) {
+      return { url: `https://vimeo.com/${vimeoMatch[1]}`, type: 'vimeo' };
+    }
+  }
+
   return null;
 }
 
@@ -118,9 +241,15 @@ async function fetchRSSSource(
       const description = entry.description?.value || '';
       const author = entry.author?.name || entry['dc:creator'] || null;
       const publishedAt = entry.published || entry.updated || null;
-      const imageUrl = extractImageUrl(entry);
+      let imageUrl = extractImageUrl(entry);
+      const videoInfo = extractVideoUrl(entry);
 
       if (!url || !title) continue;
+
+      // Fallback: fetch og:image from webpage if RSS has no image
+      if (!imageUrl && url) {
+        imageUrl = await fetchOgImage(url);
+      }
 
       // Generate content hash for deduplication
       const contentHash = await generateContentHash(title + stripHtml(content));
@@ -146,6 +275,8 @@ async function fetchRSSSource(
           original_description: stripHtml(description),
           author,
           image_url: imageUrl,
+          video_url: videoInfo?.url || null,
+          video_type: videoInfo?.type || null,
           published_at: publishedAt,
           content_hash: contentHash,
           status: 'pending',
@@ -174,7 +305,7 @@ async function fetchRSSSource(
       .from('rss_sources')
       .update({
         last_fetched_at: new Date().toISOString(),
-        error_count: supabase.sql`error_count + 1`,
+        error_count: (source.error_count || 0) + 1,
         last_error: error.message,
       })
       .eq('id', source.id);
@@ -198,13 +329,24 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+    // Parse optional limit from request body (default 10 to avoid resource limits)
+    let sourceLimit = 10;
+    try {
+      const body = await req.json();
+      if (body.limit) sourceLimit = Math.min(body.limit, 20);
+    } catch {
+      // No body or invalid JSON, use default
+    }
+
     // Get sources that need fetching
     const { data: sources, error: sourcesError } = await supabase
       .from('rss_sources')
       .select('*')
       .eq('is_active', true)
       .lt('error_count', 5) // Skip sources with too many errors
-      .or(`last_fetched_at.is.null,last_fetched_at.lt.${new Date(Date.now() - 30 * 60 * 1000).toISOString()}`);
+      .or(`last_fetched_at.is.null,last_fetched_at.lt.${new Date(Date.now() - 30 * 60 * 1000).toISOString()}`)
+      .order('last_fetched_at', { ascending: true, nullsFirst: true })
+      .limit(sourceLimit);
 
     if (sourcesError) {
       throw new Error(`Failed to fetch sources: ${sourcesError.message}`);
@@ -217,8 +359,8 @@ serve(async (req) => {
       );
     }
 
-    // Fetch sources in parallel (limit concurrency)
-    const batchSize = 5;
+    // Fetch sources in parallel (limit concurrency to avoid resource limits)
+    const batchSize = 3;
     const results: FetchResult[] = [];
 
     for (let i = 0; i < sources.length; i += batchSize) {
