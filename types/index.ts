@@ -51,6 +51,8 @@ export interface Story {
   title_en: string | null;
   summary_ar: string | null;
   summary_en: string | null;
+  // Full article content (scraped from webpage)
+  full_content: string | null;
   // AI-generated fields
   why_it_matters_ar: string | null;
   why_it_matters_en: string | null;
@@ -147,6 +149,7 @@ export interface RawArticle {
   original_title: string | null;
   original_content: string | null;
   original_description: string | null;
+  full_content: string | null;
   author: string | null;
   image_url: string | null;
   published_at: string | null;

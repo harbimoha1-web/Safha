@@ -16,6 +16,7 @@ interface RawArticle {
   original_title: string;
   original_content: string;
   original_description: string;
+  full_content: string | null;
   image_url: string | null;
   published_at: string | null;
   rss_source: {
@@ -185,6 +186,7 @@ async function processArticle(
         title_en: article.rss_source.language === 'en' ? article.original_title : null,
         summary_ar: summary.summary_ar,
         summary_en: summary.summary_en,
+        full_content: article.full_content,
         why_it_matters_ar: summary.why_it_matters_ar,
         why_it_matters_en: summary.why_it_matters_en,
         ai_quality_score: summary.quality_score,

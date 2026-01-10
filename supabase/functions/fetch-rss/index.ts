@@ -112,8 +112,16 @@ function extractImageUrl(item: any): string | null {
   return null;
 }
 
-// Fetch og:image from the actual webpage (fallback when RSS has no image)
-async function fetchOgImage(url: string): Promise<string | null> {
+// Result from webpage scraping (image + full content)
+interface WebpageData {
+  imageUrl: string | null;
+  fullContent: string | null;
+}
+
+// Fetch webpage and extract both og:image and full article content
+async function fetchWebpageData(url: string): Promise<WebpageData> {
+  const result: WebpageData = { imageUrl: null, fullContent: null };
+
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 25000); // 25s timeout for slow sites
@@ -134,66 +142,230 @@ async function fetchOgImage(url: string): Promise<string | null> {
     clearTimeout(timeoutId);
 
     if (!response.ok) {
-      console.log(`[fetchOgImage] HTTP ${response.status} for ${url}`);
-      return null;
+      console.log(`[fetchWebpageData] HTTP ${response.status} for ${url}`);
+      return result;
     }
 
     const html = await response.text();
 
+    // ========== EXTRACT IMAGE ==========
     // Try og:image first - flexible regex handles whitespace variations
-    // Pattern 1: property before content (most common)
     let ogImageMatch = html.match(/<meta[^>]*?property\s*=\s*["']?og:image["']?[^>]*?content\s*=\s*["']([^"']+)["']/i);
-    // Pattern 2: content before property
     if (!ogImageMatch) {
       ogImageMatch = html.match(/<meta[^>]*?content\s*=\s*["']([^"']+)["'][^>]*?property\s*=\s*["']?og:image["']?/i);
     }
-    // Pattern 3: using itemprop instead of property
     if (!ogImageMatch) {
       ogImageMatch = html.match(/<meta[^>]*?itemprop\s*=\s*["']?image["']?[^>]*?content\s*=\s*["']([^"']+)["']/i);
     }
     if (ogImageMatch?.[1]) {
-      const resolved = resolveImageUrl(ogImageMatch[1], url);
-      if (resolved) return resolved;
+      result.imageUrl = resolveImageUrl(ogImageMatch[1], url);
     }
 
-    // Try twitter:image with flexible patterns
-    let twitterImageMatch = html.match(/<meta[^>]*?name\s*=\s*["']?twitter:image["']?[^>]*?content\s*=\s*["']([^"']+)["']/i);
-    if (!twitterImageMatch) {
-      twitterImageMatch = html.match(/<meta[^>]*?content\s*=\s*["']([^"']+)["'][^>]*?name\s*=\s*["']?twitter:image["']?/i);
-    }
-    if (twitterImageMatch?.[1]) {
-      const resolved = resolveImageUrl(twitterImageMatch[1], url);
-      if (resolved) return resolved;
+    // Try twitter:image if no og:image
+    if (!result.imageUrl) {
+      let twitterImageMatch = html.match(/<meta[^>]*?name\s*=\s*["']?twitter:image["']?[^>]*?content\s*=\s*["']([^"']+)["']/i);
+      if (!twitterImageMatch) {
+        twitterImageMatch = html.match(/<meta[^>]*?content\s*=\s*["']([^"']+)["'][^>]*?name\s*=\s*["']?twitter:image["']?/i);
+      }
+      if (twitterImageMatch?.[1]) {
+        result.imageUrl = resolveImageUrl(twitterImageMatch[1], url);
+      }
     }
 
     // Try link rel="image_src" (older sites)
-    const linkImageMatch = html.match(/<link[^>]*?rel\s*=\s*["']?image_src["']?[^>]*?href\s*=\s*["']([^"']+)["']/i);
-    if (linkImageMatch?.[1]) {
-      const resolved = resolveImageUrl(linkImageMatch[1], url);
-      if (resolved) return resolved;
+    if (!result.imageUrl) {
+      const linkImageMatch = html.match(/<link[^>]*?rel\s*=\s*["']?image_src["']?[^>]*?href\s*=\s*["']([^"']+)["']/i);
+      if (linkImageMatch?.[1]) {
+        result.imageUrl = resolveImageUrl(linkImageMatch[1], url);
+      }
     }
 
-    // Try first image in article, main, or content div
-    const articleImgMatch = html.match(/<(?:article|main|div[^>]*class=["'][^"']*(?:content|article|post|entry)[^"']*["'])[^>]*>[\s\S]*?<img[^>]+src=["']([^"']+)["']/i);
-    if (articleImgMatch?.[1]) {
-      const resolved = resolveImageUrl(articleImgMatch[1], url);
-      if (resolved) return resolved;
+    // Try first image in article
+    if (!result.imageUrl) {
+      const articleImgMatch = html.match(/<(?:article|main|div[^>]*class=["'][^"']*(?:content|article|post|entry)[^"']*["'])[^>]*>[\s\S]*?<img[^>]+src=["']([^"']+)["']/i);
+      if (articleImgMatch?.[1]) {
+        result.imageUrl = resolveImageUrl(articleImgMatch[1], url);
+      }
     }
 
-    // Last resort: any reasonably-sized image (not icons/logos)
-    const anyImgMatch = html.match(/<img[^>]+src=["']([^"']+(?:jpg|jpeg|png|webp)[^"']*)["']/i);
-    if (anyImgMatch?.[1]) {
-      const resolved = resolveImageUrl(anyImgMatch[1], url);
-      if (resolved) return resolved;
+    // Last resort: any reasonably-sized image
+    if (!result.imageUrl) {
+      const anyImgMatch = html.match(/<img[^>]+src=["']([^"']+(?:jpg|jpeg|png|webp)[^"']*)["']/i);
+      if (anyImgMatch?.[1]) {
+        result.imageUrl = resolveImageUrl(anyImgMatch[1], url);
+      }
     }
 
-    console.log(`[fetchOgImage] No image found in HTML for ${url}`);
-    return null;
+    // ========== EXTRACT FULL ARTICLE CONTENT ==========
+    result.fullContent = extractArticleContent(html);
+
+    return result;
   } catch (error) {
-    // Log failures for debugging
-    console.error(`[fetchOgImage] Failed for ${url}:`, error.message || 'Unknown error');
+    console.error(`[fetchWebpageData] Failed for ${url}:`, error.message || 'Unknown error');
+    return result;
+  }
+}
+
+// Extract article content from HTML using multiple strategies
+function extractArticleContent(html: string): string | null {
+  // Step 1: Remove unwanted elements (scripts, styles, nav, etc.)
+  let cleaned = html
+    // Remove script tags and content
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+    // Remove style tags and content
+    .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
+    // Remove nav elements
+    .replace(/<nav\b[^<]*(?:(?!<\/nav>)<[^<]*)*<\/nav>/gi, '')
+    // Remove header elements (site header, not article headers)
+    .replace(/<header\b[^>]*class=["'][^"']*(?:site|main|page|global)[^"']*["'][^<]*(?:(?!<\/header>)<[^<]*)*<\/header>/gi, '')
+    // Remove footer elements
+    .replace(/<footer\b[^<]*(?:(?!<\/footer>)<[^<]*)*<\/footer>/gi, '')
+    // Remove aside elements (sidebars)
+    .replace(/<aside\b[^<]*(?:(?!<\/aside>)<[^<]*)*<\/aside>/gi, '')
+    // Remove common ad/promo divs
+    .replace(/<div[^>]*class=["'][^"']*(?:ad-|ads-|advert|promo|banner|sidebar|related|comment|share|social|newsletter|popup|modal)[^"']*["'][^<]*(?:(?!<\/div>)<[^<]*)*<\/div>/gi, '')
+    // Remove HTML comments
+    .replace(/<!--[\s\S]*?-->/g, '');
+
+  // Step 2: Try to find the main article content using various strategies
+  let articleHtml: string | null = null;
+
+  // Strategy 1: Look for <article> tag (most semantic)
+  const articleTagMatch = cleaned.match(/<article[^>]*>([\s\S]*?)<\/article>/i);
+  if (articleTagMatch?.[1]) {
+    articleHtml = articleTagMatch[1];
+  }
+
+  // Strategy 2: Look for common article content class names
+  if (!articleHtml) {
+    const contentPatterns = [
+      // Common article body classes
+      /<div[^>]*class=["'][^"']*(?:article-body|article-content|article__body|article__content|post-body|post-content|post__body|post__content|entry-content|entry-body|story-body|story-content|news-body|news-content)[^"']*["'][^>]*>([\s\S]*?)<\/div>/i,
+      // Generic content classes
+      /<div[^>]*class=["'][^"']*(?:content-body|main-content|page-content|text-content|body-content)[^"']*["'][^>]*>([\s\S]*?)<\/div>/i,
+      // ID-based selectors
+      /<div[^>]*id=["'](?:article|content|main-content|story|post)[^"']*["'][^>]*>([\s\S]*?)<\/div>/i,
+      // Arabic news site patterns
+      /<div[^>]*class=["'][^"']*(?:article-text|news-text|story-text|content-text)[^"']*["'][^>]*>([\s\S]*?)<\/div>/i,
+    ];
+
+    for (const pattern of contentPatterns) {
+      const match = cleaned.match(pattern);
+      if (match?.[1] && match[1].length > 200) {
+        articleHtml = match[1];
+        break;
+      }
+    }
+  }
+
+  // Strategy 3: Look for <main> tag
+  if (!articleHtml) {
+    const mainMatch = cleaned.match(/<main[^>]*>([\s\S]*?)<\/main>/i);
+    if (mainMatch?.[1]) {
+      articleHtml = mainMatch[1];
+    }
+  }
+
+  // Strategy 4: Find the div with the most paragraph tags (heuristic)
+  if (!articleHtml) {
+    // Find all substantial divs
+    const divMatches = cleaned.matchAll(/<div[^>]*>([\s\S]*?)<\/div>/gi);
+    let bestContent = '';
+    let maxParagraphs = 0;
+
+    for (const match of divMatches) {
+      const content = match[1];
+      const paragraphCount = (content.match(/<p[^>]*>/gi) || []).length;
+      const contentLength = content.replace(/<[^>]*>/g, '').length;
+
+      // Must have multiple paragraphs and substantial content
+      if (paragraphCount > maxParagraphs && contentLength > 500) {
+        maxParagraphs = paragraphCount;
+        bestContent = content;
+      }
+    }
+
+    if (bestContent && maxParagraphs >= 3) {
+      articleHtml = bestContent;
+    }
+  }
+
+  if (!articleHtml) {
+    console.log('[extractArticleContent] Could not find article content');
     return null;
   }
+
+  // Step 3: Extract and clean paragraphs
+  const paragraphs: string[] = [];
+
+  // Extract <p> tags
+  const pMatches = articleHtml.matchAll(/<p[^>]*>([\s\S]*?)<\/p>/gi);
+  for (const match of pMatches) {
+    const text = cleanHtmlToText(match[1]);
+    // Filter out short snippets (likely captions, metadata)
+    if (text.length > 40) {
+      paragraphs.push(text);
+    }
+  }
+
+  // If we got meaningful paragraphs, join them
+  if (paragraphs.length >= 2) {
+    const fullContent = paragraphs.join('\n\n');
+    // Validate we have substantial content (at least 300 chars)
+    if (fullContent.length >= 300) {
+      return fullContent;
+    }
+  }
+
+  // Fallback: if paragraphs extraction failed, try to get all text
+  const allText = cleanHtmlToText(articleHtml);
+  if (allText.length >= 300) {
+    // Split into paragraphs by double newlines or long gaps
+    return allText.replace(/\s{3,}/g, '\n\n').trim();
+  }
+
+  console.log('[extractArticleContent] Content too short or invalid');
+  return null;
+}
+
+// Clean HTML to readable text, preserving some structure
+function cleanHtmlToText(html: string): string {
+  return html
+    // Convert <br> to newlines
+    .replace(/<br\s*\/?>/gi, '\n')
+    // Remove remaining HTML tags
+    .replace(/<[^>]*>/g, '')
+    // Decode common HTML entities
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/&#x27;/g, "'")
+    .replace(/&laquo;/g, '«')
+    .replace(/&raquo;/g, '»')
+    .replace(/&ldquo;/g, '"')
+    .replace(/&rdquo;/g, '"')
+    .replace(/&lsquo;/g, ''')
+    .replace(/&rsquo;/g, ''')
+    .replace(/&ndash;/g, '–')
+    .replace(/&mdash;/g, '—')
+    .replace(/&hellip;/g, '...')
+    // Decode numeric entities
+    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(parseInt(code, 10)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, code) => String.fromCharCode(parseInt(code, 16)))
+    // Normalize whitespace
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n\s*\n/g, '\n\n')
+    .trim();
+}
+
+// Legacy function for backward compatibility (calls fetchWebpageData internally)
+async function fetchOgImage(url: string): Promise<string | null> {
+  const data = await fetchWebpageData(url);
+  return data.imageUrl;
 }
 
 // Extract video URL from RSS item
@@ -312,9 +484,16 @@ async function fetchRSSSource(
         imageUrl = resolveImageUrl(imageUrl, url);
       }
 
-      // Fallback: fetch og:image from webpage if RSS has no image
-      if (!imageUrl && url) {
-        imageUrl = await fetchOgImage(url);
+      // Fetch webpage data (image fallback + full article content)
+      let fullContent: string | null = null;
+      if (url) {
+        const webpageData = await fetchWebpageData(url);
+        // Use webpage image if RSS didn't provide one
+        if (!imageUrl && webpageData.imageUrl) {
+          imageUrl = webpageData.imageUrl;
+        }
+        // Store full article content
+        fullContent = webpageData.fullContent;
       }
 
       // Final validation: ensure URL is absolute, discard invalid URLs
@@ -344,6 +523,7 @@ async function fetchRSSSource(
           original_title: title,
           original_content: stripHtml(content),
           original_description: stripHtml(description),
+          full_content: fullContent,
           author,
           image_url: imageUrl,
           video_url: videoInfo?.url || null,

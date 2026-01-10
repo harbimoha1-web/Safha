@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,12 +10,12 @@ import {
   Share,
   ActivityIndicator,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, router } from 'expo-router';
 import { FontAwesome } from '@expo/vector-icons';
 import { useAppStore, useAuthStore } from '@/stores';
 import { useTheme } from '@/contexts/ThemeContext';
 import { getStoryById, recordInteraction, saveStory, unsaveStory, isStorySaved } from '@/lib/api';
-import { spacing, borderRadius, fontSize, fontWeight } from '@/constants/theme';
 import type { Story } from '@/types';
 
 export default function StoryDetailScreen() {
@@ -24,6 +24,7 @@ export default function StoryDetailScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isSaved, setIsSaved] = useState(false);
+  const [showFullSummary, setShowFullSummary] = useState(false);
   const { settings } = useAppStore();
   const { user } = useAuthStore();
   const { colors } = useTheme();
@@ -43,11 +44,9 @@ export default function StoryDetailScreen() {
     try {
       const data = await getStoryById(id);
       setStory(data);
-      // Check if story is already saved (optimized - single row check instead of fetching all)
       if (user && data) {
         const saved = await isStorySaved(user.id, id);
         setIsSaved(saved);
-        // Record view interaction
         recordInteraction(user.id, id, 'view').catch(() => {});
       }
     } catch (err) {
@@ -57,10 +56,10 @@ export default function StoryDetailScreen() {
     }
   };
 
-  const handleSave = async () => {
+  const handleSave = useCallback(async () => {
     if (!user || !id) return;
     const wasIsSaved = isSaved;
-    setIsSaved(!isSaved); // Optimistic update
+    setIsSaved(!isSaved);
     try {
       if (wasIsSaved) {
         await unsaveStory(user.id, id);
@@ -68,31 +67,30 @@ export default function StoryDetailScreen() {
         await saveStory(user.id, id);
       }
     } catch (err) {
-      setIsSaved(wasIsSaved); // Revert on error
+      setIsSaved(wasIsSaved);
     }
-  };
+  }, [user, id, isSaved]);
 
-  const handleShare = async () => {
+  const handleShare = useCallback(async () => {
     if (!story) return;
     try {
       const result = await Share.share({
         message: `${isArabic ? story.title_ar : story.title_en}\n\nRead on Safha`,
         url: story.original_url,
       });
-      // Track share if user completed the share action
       if (result.action === Share.sharedAction && user && id) {
         recordInteraction(user.id, id, 'share').catch(console.error);
       }
     } catch (error) {
       console.error('Share error:', error);
     }
-  };
+  }, [story, isArabic, user, id]);
 
-  const handleOpenOriginal = () => {
+  const handleOpenOriginal = useCallback(() => {
     if (story?.original_url) {
       Linking.openURL(story.original_url);
     }
-  };
+  }, [story]);
 
   if (isLoading) {
     return (
@@ -116,6 +114,11 @@ export default function StoryDetailScreen() {
       </View>
     );
   }
+
+  const title = isArabic ? story.title_ar : story.title_en;
+  const summary = isArabic ? story.summary_ar : story.summary_en;
+  const whyItMatters = isArabic ? story.why_it_matters_ar : story.why_it_matters_en;
+  const hasFullContent = story.full_content && story.full_content.length > 100;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -153,7 +156,7 @@ export default function StoryDetailScreen() {
         </View>
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView style={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Image */}
         {story.image_url && (
           <Image source={{ uri: story.image_url }} style={styles.image} />
@@ -176,13 +179,74 @@ export default function StoryDetailScreen() {
 
         {/* Title */}
         <Text style={[styles.title, { color: colors.textPrimary }, isArabic && styles.arabicText]}>
-          {isArabic ? story.title_ar : story.title_en}
+          {title}
         </Text>
 
-        {/* Summary */}
-        <Text style={[styles.summary, { color: colors.textSecondary }, isArabic && styles.arabicText]}>
-          {isArabic ? story.summary_ar : story.summary_en}
-        </Text>
+        {/* AI Summary Section */}
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onPress={() => setShowFullSummary(!showFullSummary)}
+        >
+          <LinearGradient
+            colors={['rgba(168,85,247,0.15)', 'rgba(0,122,255,0.10)']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.summaryContainer}
+          >
+            <View style={[styles.summaryHeader, isArabic && styles.summaryHeaderRtl]}>
+              <View style={styles.aiBadge}>
+                <FontAwesome name="magic" size={12} color="#fff" />
+                <Text style={styles.aiBadgeText}>AI</Text>
+              </View>
+              <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>
+                {isArabic ? 'ملخص' : 'Summary'}
+              </Text>
+              <FontAwesome
+                name={showFullSummary ? 'chevron-up' : 'chevron-down'}
+                size={12}
+                color={colors.textMuted}
+                style={styles.chevron}
+              />
+            </View>
+            <Text
+              style={[styles.summaryText, { color: colors.textSecondary }, isArabic && styles.arabicText]}
+              numberOfLines={showFullSummary ? undefined : 3}
+            >
+              {summary}
+            </Text>
+            {showFullSummary && whyItMatters && (
+              <View style={styles.whyItMattersSection}>
+                <Text style={[styles.whyItMattersLabel, { color: '#A855F7' }, isArabic && styles.arabicText]}>
+                  {isArabic ? 'لماذا يهمك؟' : 'Why it matters'}
+                </Text>
+                <Text style={[styles.whyItMattersText, { color: colors.textSecondary }, isArabic && styles.arabicText]}>
+                  {whyItMatters}
+                </Text>
+              </View>
+            )}
+          </LinearGradient>
+        </TouchableOpacity>
+
+        {/* Full Article Content */}
+        {hasFullContent ? (
+          <View style={styles.articleSection}>
+            <View style={[styles.articleDivider, { backgroundColor: colors.border }]} />
+            <Text style={[styles.articleLabel, { color: colors.textMuted }, isArabic && styles.arabicText]}>
+              {isArabic ? 'المقال الكامل' : 'Full Article'}
+            </Text>
+            <Text style={[styles.articleContent, { color: colors.textPrimary }, isArabic && styles.arabicText]}>
+              {story.full_content}
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.noContentSection}>
+            <Text style={[styles.noContentText, { color: colors.textMuted }, isArabic && styles.arabicText]}>
+              {isArabic
+                ? 'المقال الكامل غير متوفر. اضغط على الزر أدناه لقراءة المقال الأصلي.'
+                : 'Full article not available. Tap below to read the original article.'}
+            </Text>
+          </View>
+        )}
 
         {/* Stats */}
         <View style={[styles.stats, { borderTopColor: colors.border }]}>
@@ -200,7 +264,15 @@ export default function StoryDetailScreen() {
           </View>
         </View>
 
-        {/* Read Original Button */}
+        {/* Source Attribution & Original Link */}
+        <View style={styles.sourceAttribution}>
+          <Text style={[styles.attributionText, { color: colors.textMuted }, isArabic && styles.arabicText]}>
+            {isArabic
+              ? `المصدر: ${story.source?.name || 'غير معروف'}`
+              : `Source: ${story.source?.name || 'Unknown'}`}
+          </Text>
+        </View>
+
         <TouchableOpacity
           style={[styles.originalButton, { backgroundColor: colors.surface, borderColor: colors.primary }]}
           onPress={handleOpenOriginal}
@@ -279,7 +351,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  content: {
+  scrollContent: {
     flex: 1,
   },
   image: {
@@ -316,17 +388,101 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     marginTop: 16,
   },
-  summary: {
-    color: 'rgba(255,255,255,0.85)',
-    fontSize: 17,
-    lineHeight: 28,
-    paddingHorizontal: 20,
-    marginTop: 20,
-  },
   arabicText: {
     textAlign: 'right',
     writingDirection: 'rtl',
   },
+  // AI Summary Section
+  summaryContainer: {
+    marginHorizontal: 20,
+    marginTop: 20,
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(168,85,247,0.25)',
+  },
+  summaryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  summaryHeaderRtl: {
+    flexDirection: 'row-reverse',
+  },
+  aiBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#A855F7',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+    gap: 4,
+  },
+  aiBadgeText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  summaryLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    marginLeft: 8,
+    marginRight: 8,
+  },
+  chevron: {
+    marginLeft: 'auto',
+  },
+  summaryText: {
+    fontSize: 16,
+    lineHeight: 26,
+  },
+  whyItMattersSection: {
+    marginTop: 16,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(168,85,247,0.2)',
+  },
+  whyItMattersLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  whyItMattersText: {
+    fontSize: 15,
+    lineHeight: 24,
+  },
+  // Full Article Section
+  articleSection: {
+    paddingHorizontal: 20,
+    marginTop: 24,
+  },
+  articleDivider: {
+    height: 1,
+    marginBottom: 16,
+  },
+  articleLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  articleContent: {
+    fontSize: 18,
+    lineHeight: 32,
+    letterSpacing: 0.3,
+  },
+  noContentSection: {
+    paddingHorizontal: 20,
+    marginTop: 24,
+    paddingVertical: 16,
+  },
+  noContentText: {
+    fontSize: 15,
+    lineHeight: 24,
+    fontStyle: 'italic',
+  },
+  // Stats
   stats: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -346,13 +502,23 @@ const styles = StyleSheet.create({
     color: '#888',
     fontSize: 14,
   },
+  // Source Attribution
+  sourceAttribution: {
+    paddingHorizontal: 20,
+    marginTop: 8,
+    marginBottom: 16,
+  },
+  attributionText: {
+    fontSize: 13,
+    fontStyle: 'italic',
+  },
+  // Original Article Button
   originalButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
     marginHorizontal: 20,
-    marginTop: 8,
     backgroundColor: '#1a1a1a',
     borderRadius: 12,
     padding: 16,
