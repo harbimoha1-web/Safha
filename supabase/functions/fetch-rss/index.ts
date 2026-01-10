@@ -116,7 +116,7 @@ function extractImageUrl(item: any): string | null {
 async function fetchOgImage(url: string): Promise<string | null> {
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout (increased)
+    const timeoutId = setTimeout(() => controller.abort(), 25000); // 25s timeout for slow sites
 
     const response = await fetch(url, {
       signal: controller.signal,
@@ -125,43 +125,73 @@ async function fetchOgImage(url: string): Promise<string | null> {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.9,ar;q=0.8',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Referer': url, // Some sites require this
+        'Connection': 'keep-alive',
+        'Cache-Control': 'no-cache',
       },
     });
     clearTimeout(timeoutId);
 
-    if (!response.ok) return null;
+    if (!response.ok) {
+      console.log(`[fetchOgImage] HTTP ${response.status} for ${url}`);
+      return null;
+    }
 
     const html = await response.text();
 
-    // Try og:image first (most reliable) - handle various attribute orders
-    const ogImageMatch = html.match(/<meta[^>]*property\s*=\s*["']og:image["'][^>]*content\s*=\s*["']([^"']+)["']/i)
-      || html.match(/<meta[^>]*content\s*=\s*["']([^"']+)["'][^>]*property\s*=\s*["']og:image["']/i);
+    // Try og:image first - flexible regex handles whitespace variations
+    // Pattern 1: property before content (most common)
+    let ogImageMatch = html.match(/<meta[^>]*?property\s*=\s*["']?og:image["']?[^>]*?content\s*=\s*["']([^"']+)["']/i);
+    // Pattern 2: content before property
+    if (!ogImageMatch) {
+      ogImageMatch = html.match(/<meta[^>]*?content\s*=\s*["']([^"']+)["'][^>]*?property\s*=\s*["']?og:image["']?/i);
+    }
+    // Pattern 3: using itemprop instead of property
+    if (!ogImageMatch) {
+      ogImageMatch = html.match(/<meta[^>]*?itemprop\s*=\s*["']?image["']?[^>]*?content\s*=\s*["']([^"']+)["']/i);
+    }
     if (ogImageMatch?.[1]) {
-      return resolveImageUrl(ogImageMatch[1], url);
+      const resolved = resolveImageUrl(ogImageMatch[1], url);
+      if (resolved) return resolved;
     }
 
-    // Try twitter:image
-    const twitterImageMatch = html.match(/<meta[^>]*name\s*=\s*["']twitter:image["'][^>]*content\s*=\s*["']([^"']+)["']/i)
-      || html.match(/<meta[^>]*content\s*=\s*["']([^"']+)["'][^>]*name\s*=\s*["']twitter:image["']/i);
+    // Try twitter:image with flexible patterns
+    let twitterImageMatch = html.match(/<meta[^>]*?name\s*=\s*["']?twitter:image["']?[^>]*?content\s*=\s*["']([^"']+)["']/i);
+    if (!twitterImageMatch) {
+      twitterImageMatch = html.match(/<meta[^>]*?content\s*=\s*["']([^"']+)["'][^>]*?name\s*=\s*["']?twitter:image["']?/i);
+    }
     if (twitterImageMatch?.[1]) {
-      return resolveImageUrl(twitterImageMatch[1], url);
+      const resolved = resolveImageUrl(twitterImageMatch[1], url);
+      if (resolved) return resolved;
+    }
+
+    // Try link rel="image_src" (older sites)
+    const linkImageMatch = html.match(/<link[^>]*?rel\s*=\s*["']?image_src["']?[^>]*?href\s*=\s*["']([^"']+)["']/i);
+    if (linkImageMatch?.[1]) {
+      const resolved = resolveImageUrl(linkImageMatch[1], url);
+      if (resolved) return resolved;
     }
 
     // Try first image in article, main, or content div
     const articleImgMatch = html.match(/<(?:article|main|div[^>]*class=["'][^"']*(?:content|article|post|entry)[^"']*["'])[^>]*>[\s\S]*?<img[^>]+src=["']([^"']+)["']/i);
     if (articleImgMatch?.[1]) {
-      return resolveImageUrl(articleImgMatch[1], url);
+      const resolved = resolveImageUrl(articleImgMatch[1], url);
+      if (resolved) return resolved;
     }
 
     // Last resort: any reasonably-sized image (not icons/logos)
     const anyImgMatch = html.match(/<img[^>]+src=["']([^"']+(?:jpg|jpeg|png|webp)[^"']*)["']/i);
     if (anyImgMatch?.[1]) {
-      return resolveImageUrl(anyImgMatch[1], url);
+      const resolved = resolveImageUrl(anyImgMatch[1], url);
+      if (resolved) return resolved;
     }
 
+    console.log(`[fetchOgImage] No image found in HTML for ${url}`);
     return null;
-  } catch {
-    // Timeout or fetch error - just return null
+  } catch (error) {
+    // Log failures for debugging
+    console.error(`[fetchOgImage] Failed for ${url}:`, error.message || 'Unknown error');
     return null;
   }
 }
