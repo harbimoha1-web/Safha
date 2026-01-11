@@ -3,6 +3,7 @@
 
 import { create } from 'zustand';
 import { supabase } from '@/lib/supabase';
+import { recordStoryReadForReview } from '@/lib/review';
 
 interface Achievement {
   id: string;
@@ -175,6 +176,9 @@ export const useGamificationStore = create<GamificationState>((set, get) => ({
 
   recordStoryRead: async (storyId: string) => {
     const newAchievements: Achievement[] = [];
+
+    // Track for review prompt (runs regardless of auth)
+    recordStoryReadForReview().catch(console.error);
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
