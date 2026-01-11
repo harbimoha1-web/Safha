@@ -7,6 +7,7 @@ import {
   ImageBackground,
   TouchableOpacity,
   Share,
+  Modal,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { FontAwesome } from '@expo/vector-icons';
@@ -36,8 +37,12 @@ export function StoryCard({ story, isActive, language, isSaved, onSave, onShare,
   const isArabic = language === 'ar';
   const title = isArabic ? story.title_ar : story.title_en;
   const summary = isArabic ? story.summary_ar : story.summary_en;
-  const whyItMatters = isArabic ? story.why_it_matters_ar : story.why_it_matters_en;
+
+  // Get first ~150 chars of original content for preview
+  const fullContent = story.full_content?.slice(0, 150)?.trim() || null;
+
   const [showActionSheet, setShowActionSheet] = useState(false);
+  const [showSummaryModal, setShowSummaryModal] = useState(false);
   const [imageError, setImageError] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
   const [useOriginalUrl, setUseOriginalUrl] = useState(false);
@@ -157,12 +162,44 @@ export function StoryCard({ story, isActive, language, isSaved, onSave, onShare,
               >
                 {title}
               </Text>
-              <Text
-                style={[styles.summary, isArabic && styles.arabicText]}
-                numberOfLines={3}
-              >
-                {summary}
-              </Text>
+              {/* AI Summary - Clickable */}
+              {summary && (
+                <TouchableOpacity onPress={() => setShowSummaryModal(true)} activeOpacity={0.7}>
+                  <LinearGradient
+                    colors={['rgba(20,10,30,0.85)', 'rgba(30,15,45,0.80)']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.aiSummaryContainer}
+                  >
+                    <View style={[styles.aiSummaryHeader, isArabic && styles.rtlRow]}>
+                      <View style={styles.aiBadge}>
+                        <FontAwesome name="magic" size={10} color="#fff" />
+                        <Text style={styles.aiBadgeText}>AI</Text>
+                      </View>
+                      <Text style={[styles.aiSummaryLabel, isArabic && styles.arabicText]}>
+                        {isArabic ? 'ملخص' : 'Summary'}
+                      </Text>
+                    </View>
+                    <Text
+                      style={[styles.aiSummaryText, isArabic && styles.arabicText]}
+                      numberOfLines={2}
+                    >
+                      {summary}
+                    </Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              )}
+
+              {/* Original Content Preview */}
+              {fullContent && (
+                <Text
+                  style={[styles.contentPreview, isArabic && styles.arabicText]}
+                  numberOfLines={2}
+                >
+                  {fullContent}...
+                </Text>
+              )}
+
               <TouchableOpacity
                 style={styles.readMoreButton}
                 onPress={handleReadMore}
@@ -245,43 +282,42 @@ export function StoryCard({ story, isActive, language, isSaved, onSave, onShare,
               {title}
             </Text>
 
-            {/* Summary */}
-            <Text
-              style={[styles.summary, isArabic && styles.arabicText]}
-              numberOfLines={4}
-            >
-              {summary}
-            </Text>
-
-            {/* Why It Matters Section - AI Enhanced Design */}
-            {whyItMatters && (
-              <LinearGradient
-                colors={['rgba(168,85,247,0.25)', 'rgba(0,122,255,0.18)']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.whyItMattersContainer}
-              >
-                <View
-                  accessible={true}
-                  accessibilityLabel={isArabic ? `لماذا يهمك: ${whyItMatters}` : `Why it matters: ${whyItMatters}`}
+            {/* AI Summary - Clickable */}
+            {summary && (
+              <TouchableOpacity onPress={() => setShowSummaryModal(true)} activeOpacity={0.7}>
+                <LinearGradient
+                  colors={['rgba(20,10,30,0.85)', 'rgba(30,15,45,0.80)']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.aiSummaryContainer}
                 >
-                  <View style={[styles.whyItMattersHeader, isArabic && styles.whyItMattersHeaderRtl]}>
+                  <View style={[styles.aiSummaryHeader, isArabic && styles.rtlRow]}>
                     <View style={styles.aiBadge}>
                       <FontAwesome name="magic" size={10} color="#fff" />
                       <Text style={styles.aiBadgeText}>AI</Text>
                     </View>
-                    <Text style={[styles.whyItMattersLabel, isArabic && styles.arabicText]}>
-                      {isArabic ? 'لماذا يهمك؟' : 'Why it matters'}
+                    <Text style={[styles.aiSummaryLabel, isArabic && styles.arabicText]}>
+                      {isArabic ? 'ملخص' : 'Summary'}
                     </Text>
                   </View>
                   <Text
-                    style={[styles.whyItMattersText, isArabic && styles.arabicText]}
+                    style={[styles.aiSummaryText, isArabic && styles.arabicText]}
                     numberOfLines={2}
                   >
-                    {whyItMatters}
+                    {summary}
                   </Text>
-                </View>
-              </LinearGradient>
+                </LinearGradient>
+              </TouchableOpacity>
+            )}
+
+            {/* Original Content Preview */}
+            {fullContent && (
+              <Text
+                style={[styles.contentPreview, isArabic && styles.arabicText]}
+                numberOfLines={2}
+              >
+                {fullContent}...
+              </Text>
             )}
 
             {/* Read More Button */}
@@ -367,43 +403,42 @@ export function StoryCard({ story, isActive, language, isSaved, onSave, onShare,
                 {title}
               </Text>
 
-              {/* Summary */}
-              <Text
-                style={[styles.summary, isArabic && styles.arabicText]}
-                numberOfLines={4}
-              >
-                {summary}
-              </Text>
-
-              {/* Why It Matters Section */}
-              {whyItMatters && (
-                <LinearGradient
-                  colors={['rgba(168,85,247,0.25)', 'rgba(0,122,255,0.18)']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.whyItMattersContainer}
-                >
-                  <View
-                    accessible={true}
-                    accessibilityLabel={isArabic ? `لماذا يهمك: ${whyItMatters}` : `Why it matters: ${whyItMatters}`}
+              {/* AI Summary - Clickable */}
+              {summary && (
+                <TouchableOpacity onPress={() => setShowSummaryModal(true)} activeOpacity={0.7}>
+                  <LinearGradient
+                    colors={['rgba(20,10,30,0.85)', 'rgba(30,15,45,0.80)']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.aiSummaryContainer}
                   >
-                    <View style={[styles.whyItMattersHeader, isArabic && styles.whyItMattersHeaderRtl]}>
+                    <View style={[styles.aiSummaryHeader, isArabic && styles.rtlRow]}>
                       <View style={styles.aiBadge}>
                         <FontAwesome name="magic" size={10} color="#fff" />
                         <Text style={styles.aiBadgeText}>AI</Text>
                       </View>
-                      <Text style={[styles.whyItMattersLabel, isArabic && styles.arabicText]}>
-                        {isArabic ? 'لماذا يهمك؟' : 'Why it matters'}
+                      <Text style={[styles.aiSummaryLabel, isArabic && styles.arabicText]}>
+                        {isArabic ? 'ملخص' : 'Summary'}
                       </Text>
                     </View>
                     <Text
-                      style={[styles.whyItMattersText, isArabic && styles.arabicText]}
+                      style={[styles.aiSummaryText, isArabic && styles.arabicText]}
                       numberOfLines={2}
                     >
-                      {whyItMatters}
+                      {summary}
                     </Text>
-                  </View>
-                </LinearGradient>
+                  </LinearGradient>
+                </TouchableOpacity>
+              )}
+
+              {/* Original Content Preview */}
+              {fullContent && (
+                <Text
+                  style={[styles.contentPreview, isArabic && styles.arabicText]}
+                  numberOfLines={2}
+                >
+                  {fullContent}...
+                </Text>
               )}
 
               {/* Read More Button */}
@@ -468,6 +503,49 @@ export function StoryCard({ story, isActive, language, isSaved, onSave, onShare,
           </LinearGradient>
         </View>
       )}
+
+      {/* Summary Modal */}
+      <Modal
+        visible={showSummaryModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowSummaryModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowSummaryModal(false)}
+        >
+          <View style={styles.summaryModalContainer}>
+            <LinearGradient
+              colors={['rgba(20,10,30,0.95)', 'rgba(30,15,45,0.92)']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.summaryModalContent}
+            >
+              <View style={[styles.summaryModalHeader, isArabic && styles.rtlRow]}>
+                <View style={styles.aiBadge}>
+                  <FontAwesome name="magic" size={12} color="#fff" />
+                  <Text style={styles.aiBadgeText}>AI</Text>
+                </View>
+                <Text style={[styles.summaryModalLabel, isArabic && styles.arabicText]}>
+                  {isArabic ? 'ملخص' : 'Summary'}
+                </Text>
+                <TouchableOpacity
+                  onPress={() => setShowSummaryModal(false)}
+                  style={styles.closeButton}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <FontAwesome name="times" size={20} color="rgba(255,255,255,0.8)" />
+                </TouchableOpacity>
+              </View>
+              <Text style={[styles.summaryModalText, isArabic && styles.arabicText]}>
+                {summary}
+              </Text>
+            </LinearGradient>
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       {/* Action Sheet */}
       <ActionSheet
@@ -555,22 +633,37 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     marginBottom: 12,
   },
-  whyItMattersContainer: {
+  aiSummaryContainer: {
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 12,
-    marginBottom: 16,
+    marginBottom: 12,
     borderWidth: 1,
-    borderColor: 'rgba(168,85,247,0.35)',
+    borderColor: 'rgba(168,85,247,0.5)',
   },
-  whyItMattersHeader: {
+  aiSummaryHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     marginBottom: 6,
   },
-  whyItMattersHeaderRtl: {
-    flexDirection: 'row-reverse',
+  aiSummaryLabel: {
+    color: '#E9D5FF',
+    fontSize: 12,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  aiSummaryText: {
+    color: 'rgba(255,255,255,0.95)',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  contentPreview: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 12,
   },
   aiBadge: {
     flexDirection: 'row',
@@ -585,18 +678,6 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 10,
     fontWeight: '700',
-  },
-  whyItMattersLabel: {
-    color: '#E9D5FF', // Light purple for better contrast with gradient
-    fontSize: 12,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  whyItMattersText: {
-    color: 'rgba(255,255,255,0.95)',
-    fontSize: 14,
-    lineHeight: 20,
   },
   arabicText: {
     textAlign: 'right',
@@ -632,5 +713,45 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 12,
     fontWeight: '600',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  summaryModalContainer: {
+    width: '100%',
+    maxWidth: 400,
+  },
+  summaryModalContent: {
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(168,85,247,0.5)',
+  },
+  summaryModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    gap: 10,
+  },
+  rtlRow: {
+    flexDirection: 'row-reverse',
+  },
+  summaryModalLabel: {
+    color: '#E9D5FF',
+    fontSize: 14,
+    fontWeight: '700',
+    flex: 1,
+  },
+  closeButton: {
+    padding: 4,
+  },
+  summaryModalText: {
+    color: 'rgba(255,255,255,0.95)',
+    fontSize: 16,
+    lineHeight: 26,
   },
 });

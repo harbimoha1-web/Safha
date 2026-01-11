@@ -15,9 +15,9 @@ import { useLocalSearchParams, router } from 'expo-router';
 import { FontAwesome } from '@expo/vector-icons';
 import { useAppStore, useAuthStore } from '@/stores';
 import { useTheme } from '@/contexts/ThemeContext';
-import { getStoryById, recordInteraction, saveStory, unsaveStory, isStorySaved } from '@/lib/api';
+import { getStoryById, recordInteraction, saveStory, unsaveStory, isStorySaved, fetchStoryContent } from '@/lib/api';
 import { getOptimizedImageUrl } from '@/lib/image';
-import { spacing, borderRadius, fontSize, fontWeight } from '@/constants/theme';
+import { spacing, borderRadius, fontSize, fontWeight, fontFamily } from '@/constants/theme';
 import type { Story } from '@/types';
 
 export default function StoryDetailScreen() {
@@ -27,6 +27,10 @@ export default function StoryDetailScreen() {
   const [error, setError] = useState<string | null>(null);
   const [isSaved, setIsSaved] = useState(false);
   const [showFullSummary, setShowFullSummary] = useState(false);
+  const [isLoadingContent, setIsLoadingContent] = useState(false);
+  const [fetchedContent, setFetchedContent] = useState<string | null>(null);
+  const [imageError, setImageError] = useState(false);
+  const [useOriginalUrl, setUseOriginalUrl] = useState(false);
   const { settings } = useAppStore();
   const { user } = useAuthStore();
   const { colors } = useTheme();
@@ -57,6 +61,32 @@ export default function StoryDetailScreen() {
       setIsLoading(false);
     }
   };
+
+  // Fetch content on-demand if story doesn't have full_content
+  useEffect(() => {
+    const loadContentOnDemand = async () => {
+      // Only fetch if story loaded, has URL, no content, and not already fetching
+      if (!story || !story.original_url || isLoadingContent || fetchedContent) return;
+
+      // Check if content already exists
+      const existingContent = story.full_content;
+      if (existingContent && existingContent.length > 100) return;
+
+      setIsLoadingContent(true);
+      try {
+        const result = await fetchStoryContent(story.id, story.original_url);
+        if (result.content) {
+          setFetchedContent(result.content);
+        }
+      } catch (err) {
+        console.error('Failed to fetch content on-demand:', err);
+      } finally {
+        setIsLoadingContent(false);
+      }
+    };
+
+    loadContentOnDemand();
+  }, [story?.id, story?.original_url, story?.full_content]);
 
   const handleSave = useCallback(async () => {
     if (!user || !id) return;
@@ -120,7 +150,18 @@ export default function StoryDetailScreen() {
   const title = isArabic ? story.title_ar : story.title_en;
   const summary = isArabic ? story.summary_ar : story.summary_en;
   const whyItMatters = isArabic ? story.why_it_matters_ar : story.why_it_matters_en;
-  const hasFullContent = story.full_content && story.full_content.length > 100;
+
+  // Use fetched content if available, otherwise use story's full_content
+  const fullContent = fetchedContent || story.full_content;
+  const hasFullContent = fullContent && fullContent.length > 100;
+
+  // Image URL with fallback chain (same pattern as StoryCard)
+  // 1. Try optimized URL (wsrv.nl) first
+  // 2. On error, fall back to original URL
+  // 3. If both fail, hide image
+  const optimizedImageUrl = story.image_url ? getOptimizedImageUrl(story.image_url, undefined, 300) : null;
+  const displayImageUrl = useOriginalUrl ? story.image_url : (optimizedImageUrl || story.image_url);
+  const hasValidImage = displayImageUrl && !imageError;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -159,11 +200,21 @@ export default function StoryDetailScreen() {
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Image (optimized for device screen) */}
-        {story.image_url && (
+        {/* Image with fallback chain: optimized → original → hide */}
+        {hasValidImage && (
           <Image
-            source={{ uri: getOptimizedImageUrl(story.image_url, undefined, 300) || story.image_url }}
+            source={{ uri: displayImageUrl }}
             style={styles.image}
+            resizeMode="cover"
+            onError={() => {
+              if (!useOriginalUrl && story.image_url) {
+                // Optimized URL failed, try original URL
+                setUseOriginalUrl(true);
+              } else {
+                // Both failed, hide image
+                setImageError(true);
+              }
+            }}
           />
         )}
 
@@ -188,49 +239,25 @@ export default function StoryDetailScreen() {
         </Text>
 
         {/* AI Summary Section */}
-        <TouchableOpacity
-          activeOpacity={0.8}
-          onPress={() => setShowFullSummary(!showFullSummary)}
+        <LinearGradient
+          colors={['rgba(168,85,247,0.15)', 'rgba(0,122,255,0.10)']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.summaryContainer}
         >
-          <LinearGradient
-            colors={['rgba(168,85,247,0.15)', 'rgba(0,122,255,0.10)']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.summaryContainer}
-          >
-            <View style={[styles.summaryHeader, isArabic && styles.summaryHeaderRtl]}>
-              <View style={styles.aiBadge}>
-                <FontAwesome name="magic" size={12} color="#fff" />
-                <Text style={styles.aiBadgeText}>AI</Text>
-              </View>
-              <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>
-                {isArabic ? 'ملخص' : 'Summary'}
-              </Text>
-              <FontAwesome
-                name={showFullSummary ? 'chevron-up' : 'chevron-down'}
-                size={12}
-                color={colors.textMuted}
-                style={styles.chevron}
-              />
+          <View style={[styles.summaryHeader, isArabic && styles.summaryHeaderRtl]}>
+            <View style={styles.aiBadge}>
+              <FontAwesome name="magic" size={12} color="#fff" />
+              <Text style={styles.aiBadgeText}>AI</Text>
             </View>
-            <Text
-              style={[styles.summaryText, { color: colors.textSecondary }, isArabic && styles.arabicText]}
-              numberOfLines={showFullSummary ? undefined : 3}
-            >
-              {summary}
+            <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>
+              {isArabic ? 'ملخص' : 'Summary'}
             </Text>
-            {showFullSummary && whyItMatters && (
-              <View style={styles.whyItMattersSection}>
-                <Text style={[styles.whyItMattersLabel, { color: '#A855F7' }, isArabic && styles.arabicText]}>
-                  {isArabic ? 'لماذا يهمك؟' : 'Why it matters'}
-                </Text>
-                <Text style={[styles.whyItMattersText, { color: colors.textSecondary }, isArabic && styles.arabicText]}>
-                  {whyItMatters}
-                </Text>
-              </View>
-            )}
-          </LinearGradient>
-        </TouchableOpacity>
+          </View>
+          <Text style={[styles.summaryText, { color: colors.textSecondary }, isArabic && styles.arabicText]}>
+            {summary}
+          </Text>
+        </LinearGradient>
 
         {/* Full Article Content */}
         {hasFullContent ? (
@@ -239,8 +266,19 @@ export default function StoryDetailScreen() {
             <Text style={[styles.articleLabel, { color: colors.textMuted }, isArabic && styles.arabicText]}>
               {isArabic ? 'المقال الكامل' : 'Full Article'}
             </Text>
-            <Text style={[styles.articleContent, { color: colors.textPrimary }, isArabic && styles.arabicText]}>
-              {story.full_content}
+            <Text style={[
+              isArabic ? styles.articleContentArabic : styles.articleContent,
+              { color: colors.textPrimary },
+              isArabic && styles.arabicText
+            ]}>
+              {fullContent}
+            </Text>
+          </View>
+        ) : isLoadingContent ? (
+          <View style={styles.loadingContentSection}>
+            <ActivityIndicator size="small" color={colors.primary} />
+            <Text style={[styles.loadingContentText, { color: colors.textMuted }, isArabic && styles.arabicText]}>
+              {isArabic ? 'جاري تحميل المقال...' : 'Loading full article...'}
             </Text>
           </View>
         ) : (
@@ -334,7 +372,6 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 10,
-    backgroundColor: 'rgba(0,0,0,0.5)',
   },
   backButton: {
     width: 40,
@@ -396,6 +433,8 @@ const styles = StyleSheet.create({
   arabicText: {
     textAlign: 'right',
     writingDirection: 'rtl',
+    fontFamily: fontFamily.arabicRegular,
+    letterSpacing: 0,
   },
   // AI Summary Section
   summaryContainer: {
@@ -477,6 +516,12 @@ const styles = StyleSheet.create({
     lineHeight: 32,
     letterSpacing: 0.3,
   },
+  articleContentArabic: {
+    fontSize: 18,
+    lineHeight: 32,
+    letterSpacing: 0,
+    fontFamily: fontFamily.arabicRegular,
+  },
   noContentSection: {
     paddingHorizontal: 20,
     marginTop: 24,
@@ -486,6 +531,16 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 24,
     fontStyle: 'italic',
+  },
+  loadingContentSection: {
+    paddingHorizontal: 20,
+    marginTop: 24,
+    paddingVertical: 32,
+    alignItems: 'center',
+    gap: 12,
+  },
+  loadingContentText: {
+    fontSize: 14,
   },
   // Stats
   stats: {
