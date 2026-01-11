@@ -8,12 +8,27 @@ module.exports = {
     '^@/(.*)$': '<rootDir>/$1',
   },
   testMatch: ['**/__tests__/**/*.test.ts', '**/__tests__/**/*.test.tsx'],
+
+  // Coverage configuration
   collectCoverageFrom: [
     'stores/**/*.{ts,tsx}',
     'hooks/**/*.{ts,tsx}',
     'lib/**/*.{ts,tsx}',
     'constants/**/*.{ts,tsx}',
+    'components/**/*.{ts,tsx}',
     '!**/*.d.ts',
+    '!**/node_modules/**',
+    '!**/__tests__/**',
+    '!**/coverage/**',
+  ],
+  coverageDirectory: '<rootDir>/coverage',
+  coverageReporters: [
+    'text',           // Console output
+    'text-summary',   // Summary in console
+    'lcov',           // For Codecov/Coveralls
+    'html',           // Local HTML report
+    'json',           // JSON for programmatic access
+    'clover',         // For CI tools
   ],
   coverageThreshold: {
     global: {
@@ -23,6 +38,20 @@ module.exports = {
       statements: 50,
     },
   },
+
   testEnvironment: 'node',
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
+
+  // CI/CD reporters
+  reporters: [
+    'default',
+    ['jest-junit', {
+      outputDirectory: '.',
+      outputName: 'junit.xml',
+      classNameTemplate: '{classname}',
+      titleTemplate: '{title}',
+      ancestorSeparator: ' › ',
+      usePathForSuiteName: true,
+    }],
+  ],
 };

@@ -1,0 +1,119 @@
+name: Load Tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      test_type:
+        description: 'Load test to run'
+        required: true
+        default: 'feed'
+        type: choice
+        options:
+          - feed
+          - search
+          - webhook
+          - database
+          - all
+      vus:
+        description: 'Virtual users (concurrent)'
+        required: false
+        default: '50'
+      duration:
+        description: 'Test duration (e.g., 5m, 30s)'
+        required: false
+        default: '2m'
+  schedule:
+    # Run weekly on Sunday at 2 AM UTC
+    - cron: '0 2 * * 0'
+
+jobs:
+  load-tests:
+    name: k6 Load Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup k6
+        run: |
+          sudo gpg -k
+          sudo gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
+          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update
+          sudo apt-get install k6
+
+      - name: Run Feed Load Test
+        if: ${{ github.event.inputs.test_type == 'feed' || github.event.inputs.test_type == 'all' || github.event_name == 'schedule' }}
+        run: |
+          k6 run \
+            --vus ${{ github.event.inputs.vus || '50' }} \
+            --duration ${{ github.event.inputs.duration || '2m' }} \
+            --out json=results-feed.json \
+            __tests__/load/feed-load.k6.js
+        env:
+          BASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        continue-on-error: true
+
+      - name: Run Search Load Test
+        if: ${{ github.event.inputs.test_type == 'search' || github.event.inputs.test_type == 'all' || github.event_name == 'schedule' }}
+        run: |
+          k6 run \
+            --vus ${{ github.event.inputs.vus || '50' }} \
+            --duration ${{ github.event.inputs.duration || '2m' }} \
+            --out json=results-search.json \
+            __tests__/load/search-load.k6.js
+        env:
+          BASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        continue-on-error: true
+
+      - name: Run Webhook Load Test
+        if: ${{ github.event.inputs.test_type == 'webhook' || github.event.inputs.test_type == 'all' }}
+        run: |
+          k6 run \
+            --vus ${{ github.event.inputs.vus || '20' }} \
+            --duration ${{ github.event.inputs.duration || '1m' }} \
+            --out json=results-webhook.json \
+            __tests__/load/webhook-load.k6.js
+        env:
+          EDGE_FUNCTION_URL: ${{ secrets.SUPABASE_URL }}/functions/v1
+          MOYASAR_WEBHOOK_SECRET: ${{ secrets.MOYASAR_WEBHOOK_SECRET }}
+        continue-on-error: true
+
+      - name: Run Database Stress Test
+        if: ${{ github.event.inputs.test_type == 'database' || github.event.inputs.test_type == 'all' }}
+        run: |
+          k6 run \
+            --vus ${{ github.event.inputs.vus || '100' }} \
+            --duration ${{ github.event.inputs.duration || '3m' }} \
+            --out json=results-database.json \
+            __tests__/load/database-stress.k6.js
+        env:
+          BASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        continue-on-error: true
+
+      - name: Upload load test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: load-test-results
+          path: results-*.json
+          retention-days: 30
+
+      - name: Generate summary
+        if: always()
+        run: |
+          echo "## Load Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Test | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|--------|" >> $GITHUB_STEP_SUMMARY
+          for file in results-*.json; do
+            if [ -f "$file" ]; then
+              test_name=$(echo $file | sed 's/results-//' | sed 's/.json//')
+              echo "| $test_name | ✅ Completed |" >> $GITHUB_STEP_SUMMARY
+            fi
+          done

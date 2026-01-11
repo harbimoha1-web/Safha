@@ -1,0 +1,16 @@
+{
+  "tasks": {
+    "test": "deno test --allow-net --allow-env --allow-read .",
+    "test:fetch-rss": "deno test --allow-net --allow-env fetch-rss/",
+    "test:fetch-content": "deno test --allow-net --allow-env fetch-content/",
+    "test:process-articles": "deno test --allow-net --allow-env process-articles/",
+    "test:webhook-moyasar": "deno test --allow-net --allow-env webhook-moyasar/"
+  },
+  "imports": {
+    "std/": "https://deno.land/std@0.168.0/",
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.89.0"
+  },
+  "compilerOptions": {
+    "strict": true
+  }
+}

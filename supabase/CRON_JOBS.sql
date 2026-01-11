@@ -3,7 +3,21 @@
 -- HOW TO SET UP:
 -- 1. Go to Supabase Dashboard > Database > Extensions
 -- 2. Search for "pg_cron" and enable it
--- 3. Go to SQL Editor and run this entire file
+-- 3. IMPORTANT: Replace all instances of PROJECT_REF below with your project ID
+--    Your project ref can be found in: Project Settings > General
+--    Current hardcoded ref: qnibkvemxmhjgzydstlg
+-- 4. Go to SQL Editor and run this entire file
+-- ========================================
+--
+-- WARNING: HARDCODED PROJECT URL
+-- ================================
+-- pg_cron with pg_net requires literal URLs - it cannot use runtime variables.
+-- If you migrate to a new Supabase project, you MUST update this file.
+--
+-- To find and replace all URLs, run this search:
+--   grep -n "qnibkvemxmhjgzydstlg" supabase/CRON_JOBS.sql
+--
+-- Lines with hardcoded URLs: 61, 84, 107
 -- ========================================
 
 -- Enable pg_cron extension (required - enable via Dashboard first!)

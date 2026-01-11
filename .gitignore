@@ -40,3 +40,12 @@ yarn-error.*
 /ios
 /android
 .env
+
+# Test coverage
+coverage/
+junit.xml
+
+# Playwright
+playwright-report/
+test-results/
+playwright/.cache/

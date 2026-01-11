@@ -3,10 +3,33 @@ jest.mock('@react-native-async-storage/async-storage', () =>
   require('@react-native-async-storage/async-storage/jest/async-storage-mock')
 );
 
+// Mock Sentry React Native (native module)
+jest.mock('@sentry/react-native', () => ({
+  init: jest.fn(),
+  captureException: jest.fn(),
+  captureMessage: jest.fn(),
+  setUser: jest.fn(),
+  setTag: jest.fn(),
+  setExtra: jest.fn(),
+  addBreadcrumb: jest.fn(),
+  withScope: jest.fn((callback) => callback({ setExtra: jest.fn(), setTag: jest.fn() })),
+  Severity: {
+    Fatal: 'fatal',
+    Error: 'error',
+    Warning: 'warning',
+    Info: 'info',
+    Debug: 'debug',
+  },
+  wrap: (component) => component,
+  ReactNavigationInstrumentation: jest.fn(),
+  ReactNativeTracing: jest.fn(),
+}));
+
 // Mock Supabase client
 jest.mock('@/lib/supabase', () => ({
   supabase: {
     auth: {
+      getUser: jest.fn().mockResolvedValue({ data: { user: null }, error: null }),
       signInWithPassword: jest.fn(),
       signUp: jest.fn(),
       signInWithOAuth: jest.fn(),
@@ -15,6 +38,7 @@ jest.mock('@/lib/supabase', () => ({
       getSession: jest.fn().mockResolvedValue({ data: { session: null }, error: null }),
       onAuthStateChange: jest.fn(() => ({ data: { subscription: { unsubscribe: jest.fn() } } })),
     },
+    rpc: jest.fn().mockResolvedValue({ data: [], error: null }),
     from: jest.fn(() => ({
       select: jest.fn(() => ({
         eq: jest.fn(() => ({
