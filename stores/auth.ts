@@ -12,6 +12,11 @@ interface AuthState {
   isAuthenticated: boolean;
   pendingPhone: string | null; // For OTP verification
 
+  // Computed getters
+  isAdmin: () => boolean;
+  isModerator: () => boolean;
+  isAdminOrModerator: () => boolean;
+
   // Actions
   setSession: (session: Session | null) => void;
   setProfile: (profile: Profile | null) => void;
@@ -33,6 +38,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   isLoading: true,
   isAuthenticated: false,
   pendingPhone: null,
+
+  // Computed getters for role checks
+  isAdmin: () => get().profile?.role === 'admin',
+  isModerator: () => get().profile?.role === 'moderator',
+  isAdminOrModerator: () => {
+    const role = get().profile?.role;
+    return role === 'admin' || role === 'moderator';
+  },
 
   setSession: (session) => {
     set({

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -18,13 +18,14 @@ import { router } from 'expo-router';
 import { useAppStore, useAuthStore, useSubscriptionStore, useGamificationStore } from '@/stores';
 import { updateProfile } from '@/lib/api';
 import { useBlockedSources, useUnblockSource } from '@/hooks';
+import type { NotificationPreferences } from '@/types';
 import { colors as staticColors, spacing, borderRadius, fontSize, fontWeight } from '@/constants';
 import { useTheme } from '@/contexts/ThemeContext';
 
 export default function ProfileScreen() {
   const { settings, setLanguage, setTheme } = useAppStore();
-  const { isAuthenticated, profile, user, signOut, setProfile } = useAuthStore();
-  const { subscription, isPremium, fetchSubscription } = useSubscriptionStore();
+  const { isAuthenticated, profile, user, signOut, setProfile, isAdminOrModerator } = useAuthStore();
+  const { subscription, isPremium, fetchSubscription, cancelSubscription } = useSubscriptionStore();
   const { stats, unlockedAchievements, fetchStats, fetchAchievements } = useGamificationStore();
   const { colors } = useTheme();
 
@@ -39,15 +40,66 @@ export default function ProfileScreen() {
   const { data: blockedSources } = useBlockedSources();
   const unblockSourceMutation = useUnblockSource();
 
-  // Notification settings state
-  const [notifSettings, setNotifSettings] = useState({
-    dailyDigest: false,
-    weeklyDigest: true,
-    breakingNews: true,
-    streakReminder: true,
-  });
+  // Notification settings state - synced with database
+  const defaultNotifPrefs: NotificationPreferences = {
+    daily_digest: false,
+    breaking_news: true,
+    weekly_summary: true,
+    push_enabled: true,
+    email_enabled: false,
+  };
+  const [notifSettings, setNotifSettings] = useState<NotificationPreferences>(defaultNotifPrefs);
+  const [streakReminder, setStreakReminder] = useState(true); // Local only for now
+  const isInitialLoad = useRef(true);
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const isArabic = settings.language === 'ar';
+
+  // Load notification preferences from profile
+  useEffect(() => {
+    if (profile?.notification_preferences) {
+      setNotifSettings(profile.notification_preferences);
+    }
+  }, [profile?.notification_preferences]);
+
+  // Save notification preferences to database (debounced)
+  const saveNotificationPreferences = useCallback(async (prefs: NotificationPreferences) => {
+    if (!user || isInitialLoad.current) return;
+
+    try {
+      const updatedProfile = await updateProfile(user.id, {
+        notification_preferences: prefs,
+      });
+      setProfile(updatedProfile);
+    } catch (error) {
+      console.error('Failed to save notification preferences:', error);
+    }
+  }, [user, setProfile]);
+
+  // Debounced save when settings change
+  useEffect(() => {
+    // Skip initial load
+    if (isInitialLoad.current) {
+      isInitialLoad.current = false;
+      return;
+    }
+
+    // Clear existing timeout
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+
+    // Save after 500ms of no changes
+    saveTimeoutRef.current = setTimeout(() => {
+      saveNotificationPreferences(notifSettings);
+    }, 500);
+
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, [notifSettings, saveNotificationPreferences]);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -131,6 +183,38 @@ export default function ProfileScreen() {
                 );
               },
             });
+          },
+        },
+      ]
+    );
+  };
+
+  const handleCancelSubscription = () => {
+    Alert.alert(
+      isArabic ? 'إلغاء الاشتراك' : 'Cancel Subscription',
+      isArabic
+        ? `سيبقى اشتراكك نشطًا حتى ${subscription?.currentPeriodEnd ? new Date(subscription.currentPeriodEnd).toLocaleDateString(isArabic ? 'ar-SA' : 'en-US') : 'نهاية الفترة'}. بعد ذلك سيتم إلغاء اشتراكك.`
+        : `Your subscription will remain active until ${subscription?.currentPeriodEnd ? new Date(subscription.currentPeriodEnd).toLocaleDateString() : 'the end of your billing period'}. After that, your subscription will be cancelled.`,
+      [
+        { text: isArabic ? 'إلغاء' : 'Keep Subscription', style: 'cancel' },
+        {
+          text: isArabic ? 'تأكيد الإلغاء' : 'Cancel Subscription',
+          style: 'destructive',
+          onPress: async () => {
+            const result = await cancelSubscription();
+            if (result.success) {
+              Alert.alert(
+                isArabic ? 'تم' : 'Done',
+                isArabic
+                  ? 'تم إلغاء اشتراكك. ستستمر في التمتع بالمميزات حتى نهاية فترة الاشتراك الحالية.'
+                  : 'Your subscription has been cancelled. You will continue to enjoy premium features until the end of your current billing period.'
+              );
+            } else {
+              Alert.alert(
+                isArabic ? 'خطأ' : 'Error',
+                result.error || (isArabic ? 'فشل في إلغاء الاشتراك' : 'Failed to cancel subscription')
+              );
+            }
           },
         },
       ]
@@ -277,29 +361,59 @@ export default function ProfileScreen() {
       )}
 
       {/* Premium Section */}
-      <TouchableOpacity
-        style={[styles.premiumCard, { backgroundColor: colors.surface, borderColor: colors.border }, isPremium && styles.premiumCardActive]}
-        onPress={() => router.push('/subscription')}
-        accessibilityRole="button"
-        accessibilityLabel={isPremium ? (isArabic ? 'أنت مشترك بريميوم' : 'You are Premium') : (isArabic ? 'ترقية إلى بريميوم' : 'Upgrade to Premium')}
-      >
-        <View style={styles.premiumLeft}>
-          <FontAwesome name="star" size={24} color={isPremium ? '#FFD700' : colors.primary} />
-          <View style={styles.premiumText}>
-            <Text style={[styles.premiumTitle, { color: colors.textPrimary }]}>
-              {isPremium
-                ? (isArabic ? 'مشترك بريميوم' : 'Premium Member')
-                : (isArabic ? 'ترقية إلى بريميوم' : 'Upgrade to Premium')}
+      <View style={[styles.premiumCard, { backgroundColor: colors.surface, borderColor: colors.border }, isPremium && styles.premiumCardActive]}>
+        <TouchableOpacity
+          style={styles.premiumCardContent}
+          onPress={() => router.push('/subscription')}
+          accessibilityRole="button"
+          accessibilityLabel={isPremium ? (isArabic ? 'أنت مشترك بريميوم' : 'You are Premium') : (isArabic ? 'ترقية إلى بريميوم' : 'Upgrade to Premium')}
+        >
+          <View style={styles.premiumLeft}>
+            <FontAwesome name="star" size={24} color={isPremium ? '#FFD700' : colors.primary} />
+            <View style={styles.premiumText}>
+              <Text style={[styles.premiumTitle, { color: colors.textPrimary }]}>
+                {isPremium
+                  ? (isArabic ? 'مشترك بريميوم' : 'Premium Member')
+                  : (isArabic ? 'ترقية إلى بريميوم' : 'Upgrade to Premium')}
+              </Text>
+              <Text style={[styles.premiumSubtitle, { color: colors.textSecondary }]}>
+                {isPremium
+                  ? subscription?.cancelAtPeriodEnd
+                    ? (isArabic
+                        ? `ينتهي في ${subscription?.currentPeriodEnd ? new Date(subscription.currentPeriodEnd).toLocaleDateString(isArabic ? 'ar-SA' : 'en-US') : ''}`
+                        : `Active until ${subscription?.currentPeriodEnd ? new Date(subscription.currentPeriodEnd).toLocaleDateString() : ''}`)
+                    : (isArabic ? 'تستمتع بجميع المميزات' : 'Enjoying all features')
+                  : (isArabic ? 'ملخصات يومية • بدون إعلانات • المزيد' : 'Daily digests • No ads • More')}
+              </Text>
+            </View>
+          </View>
+          <FontAwesome name="chevron-right" size={14} color={colors.textMuted} />
+        </TouchableOpacity>
+
+        {/* Cancel Subscription Button */}
+        {isPremium && !subscription?.cancelAtPeriodEnd && (
+          <TouchableOpacity
+            style={styles.cancelSubscriptionButton}
+            onPress={handleCancelSubscription}
+            accessibilityRole="button"
+            accessibilityLabel={isArabic ? 'إلغاء الاشتراك' : 'Cancel subscription'}
+          >
+            <Text style={[styles.cancelSubscriptionText, { color: colors.textMuted }]}>
+              {isArabic ? 'إلغاء الاشتراك' : 'Cancel Subscription'}
             </Text>
-            <Text style={[styles.premiumSubtitle, { color: colors.textSecondary }]}>
-              {isPremium
-                ? (isArabic ? 'تستمتع بجميع المميزات' : 'Enjoying all features')
-                : (isArabic ? 'ملخصات يومية • بدون إعلانات • المزيد' : 'Daily digests • No ads • More')}
+          </TouchableOpacity>
+        )}
+
+        {/* Cancelled status */}
+        {isPremium && subscription?.cancelAtPeriodEnd && (
+          <View style={[styles.cancelledBadge, { backgroundColor: colors.error + '20' }]}>
+            <FontAwesome name="info-circle" size={14} color={colors.error} />
+            <Text style={[styles.cancelledText, { color: colors.error }]}>
+              {isArabic ? 'تم إلغاء الاشتراك' : 'Subscription cancelled'}
             </Text>
           </View>
-        </View>
-        <FontAwesome name="chevron-right" size={14} color={colors.textMuted} />
-      </TouchableOpacity>
+        )}
+      </View>
 
       {/* My Stats Section */}
       {isAuthenticated && (
@@ -415,16 +529,16 @@ export default function ProfileScreen() {
             iconColor={colors.whatsapp}
             rightElement={
               <Switch
-                value={isPremium && notifSettings.weeklyDigest}
+                value={isPremium && notifSettings.weekly_summary}
                 onValueChange={(val) => {
                   if (!isPremium) {
                     router.push('/subscription');
                   } else {
-                    setNotifSettings({ ...notifSettings, weeklyDigest: val });
+                    setNotifSettings({ ...notifSettings, weekly_summary: val });
                   }
                 }}
                 trackColor={{ false: colors.border, true: colors.whatsapp }}
-                thumbColor={colors.textPrimary}
+                thumbColor="#fff"
               />
             }
             showArrow={false}
@@ -456,6 +570,23 @@ export default function ProfileScreen() {
           />
         </View>
       </View>
+
+      {/* Admin Panel - Only visible to admins/moderators */}
+      {isAuthenticated && isAdminOrModerator() && (
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: colors.textSecondary }, isArabic && styles.arabicText]}>
+            {isArabic ? 'لوحة الإدارة' : 'Admin'}
+          </Text>
+          <View style={[styles.sectionContent, { backgroundColor: colors.surface }]}>
+            <SettingsItem
+              icon="dashboard"
+              title={isArabic ? 'لوحة التحكم' : 'Admin Dashboard'}
+              iconColor="#A855F7"
+              onPress={() => router.push('/admin')}
+            />
+          </View>
+        </View>
+      )}
 
       {/* About */}
       <View style={styles.section}>
@@ -626,13 +757,13 @@ export default function ProfileScreen() {
                     </View>
                   )}
                   <Switch
-                    value={isPremium && notifSettings.dailyDigest}
+                    value={isPremium && notifSettings.daily_digest}
                     onValueChange={(val) => {
                       if (!isPremium) {
                         router.push('/subscription');
                         setNotificationModalVisible(false);
                       } else {
-                        setNotifSettings({ ...notifSettings, dailyDigest: val });
+                        setNotifSettings({ ...notifSettings, daily_digest: val });
                       }
                     }}
                     trackColor={{ false: colors.border, true: colors.primary }}
@@ -651,8 +782,8 @@ export default function ProfileScreen() {
                   </Text>
                 </View>
                 <Switch
-                  value={notifSettings.breakingNews}
-                  onValueChange={(val) => setNotifSettings({ ...notifSettings, breakingNews: val })}
+                  value={notifSettings.breaking_news}
+                  onValueChange={(val) => setNotifSettings({ ...notifSettings, breaking_news: val })}
                   trackColor={{ false: colors.border, true: colors.primary }}
                   thumbColor="#fff"
                 />
@@ -668,8 +799,8 @@ export default function ProfileScreen() {
                   </Text>
                 </View>
                 <Switch
-                  value={notifSettings.streakReminder}
-                  onValueChange={(val) => setNotifSettings({ ...notifSettings, streakReminder: val })}
+                  value={streakReminder}
+                  onValueChange={(val) => setStreakReminder(val)}
                   trackColor={{ false: colors.border, true: colors.primary }}
                   thumbColor="#fff"
                 />
@@ -851,6 +982,35 @@ const styles = StyleSheet.create({
   premiumCardActive: {
     borderColor: '#FFD700',
     backgroundColor: 'rgba(255, 215, 0, 0.1)',
+  },
+  premiumCardContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  cancelSubscriptionButton: {
+    alignItems: 'center',
+    paddingTop: spacing.md,
+    marginTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(128, 128, 128, 0.2)',
+  },
+  cancelSubscriptionText: {
+    fontSize: fontSize.sm,
+  },
+  cancelledBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginTop: spacing.md,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    borderRadius: borderRadius.sm,
+    alignSelf: 'flex-start',
+  },
+  cancelledText: {
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.medium,
   },
   premiumLeft: {
     flexDirection: 'row',

@@ -46,7 +46,9 @@ interface AppState {
   toggleSourceSelection: (sourceId: string) => void;
   selectAllVisibleSources: (sourceIds: string[]) => void;
   deselectAllVisibleSources: (sourceIds: string[]) => void;
+  toggleAllVisibleSources: (sourceIds: string[]) => void;
   resetSourceSelections: () => void;
+  areAllSourcesSelected: (sourceIds: string[]) => boolean;
 }
 
 export const useAppStore = create<AppState>()(
@@ -148,7 +150,34 @@ export const useAppStore = create<AppState>()(
           deselectedSources: [...new Set([...state.deselectedSources, ...sourceIds])],
         })),
 
+      toggleAllVisibleSources: (sourceIds) =>
+        set((state) => {
+          // Check if all sources are currently selected (none in deselectedSources)
+          const allSelected = sourceIds.every(
+            (id) => !state.deselectedSources.includes(id)
+          );
+
+          if (allSelected) {
+            // All are selected, so deselect all
+            return {
+              deselectedSources: [...new Set([...state.deselectedSources, ...sourceIds])],
+            };
+          } else {
+            // Some or all are deselected, so select all
+            return {
+              deselectedSources: state.deselectedSources.filter(
+                (id) => !sourceIds.includes(id)
+              ),
+            };
+          }
+        }),
+
       resetSourceSelections: () => set({ deselectedSources: [] }),
+
+      areAllSourcesSelected: (sourceIds) => {
+        const state = useAppStore.getState();
+        return sourceIds.every((id) => !state.deselectedSources.includes(id));
+      },
     }),
     {
       name: 'safha-app-storage',

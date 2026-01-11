@@ -57,6 +57,7 @@ interface SubscriptionState {
   initiatePayment: (plan: PlanType) => Promise<PaymentResult>;
   confirmPayment: () => Promise<void>;
   subscribe: (plan: PlanType) => Promise<void>;
+  cancelSubscription: () => Promise<{ success: boolean; error?: string }>;
   checkFeatureAccess: (feature: keyof typeof SUBSCRIPTION_PLANS.premium.features) => boolean;
   getTopicLimit: () => number;
   reset: () => void;
@@ -232,6 +233,48 @@ export const useSubscriptionStore = create<SubscriptionState>()(
     } catch (error) {
       set({ isLoading: false });
       throw error;
+    }
+  },
+
+  cancelSubscription: async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        return { success: false, error: 'User not authenticated' };
+      }
+
+      const { subscription } = get();
+      if (!subscription) {
+        return { success: false, error: 'No active subscription' };
+      }
+
+      // Mark subscription to cancel at period end
+      const { error } = await supabase
+        .from('subscriptions')
+        .update({ cancel_at_period_end: true })
+        .eq('user_id', user.id)
+        .eq('id', subscription.id);
+
+      if (error) {
+        console.error('Cancel subscription error:', error);
+        return { success: false, error: 'Failed to cancel subscription' };
+      }
+
+      // Update local state
+      set({
+        subscription: {
+          ...subscription,
+          cancelAtPeriodEnd: true,
+        },
+      });
+
+      return { success: true };
+    } catch (error) {
+      console.error('Cancel subscription failed:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
     }
   },
 

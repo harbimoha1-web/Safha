@@ -147,7 +147,7 @@ export function StoryCard({ story, isActive, language, isSaved, onSave, onShare,
           >
             <View style={styles.content}>
               {story.source && (
-                <View style={styles.sourceBadge}>
+                <View style={[styles.sourceBadge, isArabic && styles.sourceBadgeRtl]}>
                   <Text style={styles.sourceText}>{story.source.name}</Text>
                 </View>
               )}
@@ -232,7 +232,7 @@ export function StoryCard({ story, isActive, language, isSaved, onSave, onShare,
           <View style={styles.content}>
             {/* Source Badge */}
             {story.source && (
-              <View style={styles.sourceBadge}>
+              <View style={[styles.sourceBadge, isArabic && styles.sourceBadgeRtl]}>
                 <Text style={styles.sourceText}>{story.source.name}</Text>
               </View>
             )}
@@ -533,6 +533,9 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignSelf: 'flex-start',
     marginBottom: 16,
+  },
+  sourceBadgeRtl: {
+    alignSelf: 'flex-end',
   },
   sourceText: {
     color: '#fff',

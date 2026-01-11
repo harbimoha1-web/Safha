@@ -51,6 +51,12 @@ export function TopicAccordion({
     return filteredSources.filter((s) => !deselectedSources.includes(s.id)).length;
   }, [filteredSources, deselectedSources]);
 
+  // Check if all sources are selected (for toggle button state)
+  const allSelected = useMemo(() => {
+    return filteredSources.length > 0 &&
+      filteredSources.every((s) => !deselectedSources.includes(s.id));
+  }, [filteredSources, deselectedSources]);
+
   const topicColor = topic.color || getTopicColor(topic.slug);
 
   const handleToggle = () => {
@@ -107,16 +113,27 @@ export function TopicAccordion({
             isArabic={isArabic}
           />
 
-          {/* Select All */}
+          {/* Select/Deselect All Toggle */}
           <TouchableOpacity
             style={[styles.selectAllButton, { borderColor: colors.border }]}
             onPress={handleSelectAll}
             accessibilityRole="button"
-            accessibilityLabel={isArabic ? 'تحديد الكل' : 'Select All'}
+            accessibilityLabel={
+              allSelected
+                ? (isArabic ? 'إلغاء تحديد الكل' : 'Deselect All')
+                : (isArabic ? 'تحديد الكل' : 'Select All')
+            }
           >
-            <FontAwesome name="check-square-o" size={16} color={colors.primary} />
+            <FontAwesome
+              name={allSelected ? 'square-o' : 'check-square-o'}
+              size={16}
+              color={colors.primary}
+            />
             <Text style={[styles.selectAllText, { color: colors.primary }]}>
-              {isArabic ? 'تحديد الكل' : 'Select All'}
+              {allSelected
+                ? (isArabic ? 'إلغاء تحديد الكل' : 'Deselect All')
+                : (isArabic ? 'تحديد الكل' : 'Select All')
+              }
             </Text>
           </TouchableOpacity>
 

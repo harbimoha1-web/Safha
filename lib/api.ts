@@ -83,6 +83,94 @@ export async function getStoryById(id: string): Promise<Story | null> {
   return data;
 }
 
+// Fetch content on-demand for stories without full_content
+// Uses direct fetch with retry logic for cold start resilience
+export async function fetchStoryContent(
+  storyId: string,
+  originalUrl: string
+): Promise<{ content: string | null; quality: number }> {
+  const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    console.error('Supabase config missing');
+    return { content: null, quality: 0 };
+  }
+
+  const maxRetries = 3;
+  let lastError: any;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 25000);
+
+      const response = await fetch(
+        `${supabaseUrl}/functions/v1/fetch-content`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': supabaseAnonKey,
+            'Authorization': `Bearer ${supabaseAnonKey}`,
+          },
+          body: JSON.stringify({ story_id: storyId, url: originalUrl }),
+          signal: controller.signal,
+        }
+      );
+
+      clearTimeout(timeoutId);
+
+      // Retry on 502/503/504 errors (cold start / transient)
+      if (response.status >= 502 && response.status <= 504) {
+        console.log(`Fetch attempt ${attempt} failed with ${response.status}, retrying...`);
+        lastError = new Error(`HTTP ${response.status}`);
+        if (attempt < maxRetries) {
+          await new Promise(r => setTimeout(r, attempt * 1000));
+          continue;
+        }
+        return { content: null, quality: 0 };
+      }
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Fetch content error:', response.status, errorText);
+        return { content: null, quality: 0 };
+      }
+
+      const data = await response.json();
+
+      if (data?.success && data.content) {
+        if (attempt > 1) {
+          console.log(`Fetch succeeded on attempt ${attempt}`);
+        }
+        return { content: data.content, quality: data.quality || 0 };
+      }
+
+      if (data && !data.success) {
+        console.log('Content extraction failed:', data?.method, data?.error);
+      }
+
+      return { content: null, quality: 0 };
+    } catch (err: any) {
+      lastError = err;
+      if (err.name === 'AbortError') {
+        console.log(`Fetch attempt ${attempt} timed out`);
+      } else {
+        console.log(`Fetch attempt ${attempt} error:`, err.message);
+      }
+
+      if (attempt < maxRetries) {
+        await new Promise(r => setTimeout(r, attempt * 1000));
+        continue;
+      }
+    }
+  }
+
+  console.error('All fetch attempts failed:', lastError);
+  return { content: null, quality: 0 };
+}
+
 export async function getStoriesByTopic(
   topicId: string,
   limit = 20
@@ -414,8 +502,45 @@ export async function searchStories(
   const validQuery = validateInput(SearchQuerySchema, query);
   const validLimit = Math.min(Math.max(1, limit), 100);
 
-  // Escape SQL wildcards to prevent injection
-  const escapedQuery = escapeSqlWildcards(validQuery);
+  try {
+    // Use the fuzzy search RPC function (with pg_trgm for partial/typo matching)
+    const { data, error } = await supabase.rpc('search_stories_v2', {
+      search_query: validQuery,
+      result_limit: validLimit,
+    });
+
+    if (error) {
+      // Fallback to exact match if RPC fails (e.g., function doesn't exist yet)
+      console.warn('Fuzzy search failed, falling back to exact match:', error.message);
+      return searchStoriesExact(validQuery, validLimit);
+    }
+
+    // The RPC returns stories without the source relation, so we need to fetch sources
+    if (data && data.length > 0) {
+      const storyIds = data.map((s: Story) => s.id);
+      const { data: storiesWithSources } = await supabase
+        .from('stories')
+        .select(STORY_SELECT)
+        .in('id', storyIds);
+
+      // Preserve the order from the RPC results
+      if (storiesWithSources) {
+        const storyMap = new Map(storiesWithSources.map((s) => [s.id, s]));
+        return data.map((s: Story) => storyMap.get(s.id) || s);
+      }
+    }
+
+    return data || [];
+  } catch (err) {
+    // Fallback to exact match on any error
+    console.warn('Search error, falling back to exact match:', err);
+    return searchStoriesExact(validQuery, validLimit);
+  }
+}
+
+// Fallback exact match search (used if fuzzy search RPC is unavailable)
+async function searchStoriesExact(query: string, limit: number): Promise<Story[]> {
+  const escapedQuery = escapeSqlWildcards(query);
 
   const { data, error } = await supabase
     .from('stories')
@@ -427,7 +552,7 @@ export async function searchStories(
         `summary_en.ilike.%${escapedQuery}%`
     )
     .order('published_at', { ascending: false })
-    .limit(validLimit);
+    .limit(limit);
 
   if (error) {
     throw new APIError(`Search failed: ${error.message}`, 500, error.code);

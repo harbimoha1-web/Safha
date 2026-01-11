@@ -1,5 +1,7 @@
 // Safha App Type Definitions
 
+export type UserRole = 'user' | 'admin' | 'moderator';
+
 export interface Profile {
   id: string;
   username: string | null;
@@ -8,6 +10,7 @@ export interface Profile {
   language: 'ar' | 'en';
   notification_preferences: NotificationPreferences;
   selected_topics: string[];
+  role?: UserRole;
   created_at: string;
   updated_at: string;
 }
@@ -61,8 +64,11 @@ export interface Story {
   is_approved: boolean;
   approved_by: string | null;
   approved_at: string | null;
-  // Other fields
+  // Media fields
   image_url: string | null;
+  video_url: string | null;
+  video_type: 'mp4' | 'youtube' | 'vimeo' | null;
+  // Other fields
   topic_ids: string[];
   topics?: Topic[];
   published_at: string | null;
@@ -154,6 +160,8 @@ export interface RawArticle {
   content_quality: number | null;
   author: string | null;
   image_url: string | null;
+  video_url: string | null;
+  video_type: string | null;
   published_at: string | null;
   fetched_at: string;
   status: 'pending' | 'processing' | 'processed' | 'failed' | 'duplicate' | 'rejected';
@@ -181,4 +189,44 @@ export interface AppSettings {
   textSize: 'small' | 'medium' | 'large';
   autoPlayVideos: boolean;
   newsFrequency: NewsFrequency;
+}
+
+// Admin Types
+export interface AdminAuditLog {
+  id: string;
+  admin_id: string | null;
+  action_type: string;
+  target_table: string;
+  target_id: string;
+  old_value: Record<string, unknown> | null;
+  new_value: Record<string, unknown> | null;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+}
+
+export interface AdminDashboardStats {
+  pending_stories: number;
+  total_stories: number;
+  active_sources: number;
+  total_sources: number;
+  total_users: number;
+  premium_users: number;
+  stories_today: number;
+  users_today: number;
+}
+
+export interface AdminStoryFilters {
+  status?: 'pending' | 'approved' | 'rejected';
+  source_id?: string;
+  topic_id?: string;
+  language?: 'ar' | 'en';
+  date_from?: string;
+  date_to?: string;
+}
+
+export interface AdminSourceFilters {
+  is_active?: boolean;
+  language?: 'ar' | 'en';
+  category?: string;
+  has_errors?: boolean;
 }

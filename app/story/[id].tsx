@@ -16,6 +16,8 @@ import { FontAwesome } from '@expo/vector-icons';
 import { useAppStore, useAuthStore } from '@/stores';
 import { useTheme } from '@/contexts/ThemeContext';
 import { getStoryById, recordInteraction, saveStory, unsaveStory, isStorySaved } from '@/lib/api';
+import { getOptimizedImageUrl } from '@/lib/image';
+import { spacing, borderRadius, fontSize, fontWeight } from '@/constants/theme';
 import type { Story } from '@/types';
 
 export default function StoryDetailScreen() {
@@ -156,10 +158,13 @@ export default function StoryDetailScreen() {
         </View>
       </View>
 
-      <ScrollView style={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Image */}
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Image (optimized for device screen) */}
         {story.image_url && (
-          <Image source={{ uri: story.image_url }} style={styles.image} />
+          <Image
+            source={{ uri: getOptimizedImageUrl(story.image_url, undefined, 300) || story.image_url }}
+            style={styles.image}
+          />
         )}
 
         {/* Source & Date */}

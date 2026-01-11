@@ -21,13 +21,14 @@ export function SourceManagement({ isArabic }: SourceManagementProps) {
   const { data: sources = [], isLoading: isLoadingSources } = useSources();
   const { data: topicSourceMapping = [], isLoading: isLoadingMapping } = useTopicSourceMapping();
 
-  const { deselectedSources, toggleSourceSelection, selectAllVisibleSources } = useAppStore();
+  const { deselectedSources, toggleSourceSelection, toggleAllVisibleSources } = useAppStore();
 
   const isLoading = isLoadingTopics || isLoadingSources || isLoadingMapping;
 
-  // Create a map of topic ID -> sources
-  const topicSourcesMap = useMemo(() => {
+  // Create a map of topic ID -> sources and track uncategorized sources
+  const { topicSourcesMap, uncategorizedSources } = useMemo(() => {
     const map = new Map<string, Source[]>();
+    const categorizedSourceIds = new Set<string>();
 
     // If we have mapping data, use it
     if (topicSourceMapping.length > 0) {
@@ -36,15 +37,22 @@ export function SourceManagement({ isArabic }: SourceManagementProps) {
           mapping.source_ids.includes(s.id)
         );
         map.set(mapping.topic_id, topicSources);
+        // Track all categorized sources
+        topicSources.forEach((s) => categorizedSourceIds.add(s.id));
       });
     } else {
       // Fallback: show all sources under each topic (for development)
       topics.forEach((topic) => {
         map.set(topic.id, sources);
       });
+      // All sources are categorized in fallback mode
+      sources.forEach((s) => categorizedSourceIds.add(s.id));
     }
 
-    return map;
+    // Find sources without any topic association
+    const uncategorized = sources.filter((s) => !categorizedSourceIds.has(s.id));
+
+    return { topicSourcesMap: map, uncategorizedSources: uncategorized };
   }, [topics, sources, topicSourceMapping]);
 
   // Calculate total selected
@@ -108,11 +116,37 @@ export function SourceManagement({ isArabic }: SourceManagementProps) {
               onLanguageFilterChange={setLanguageFilter}
               deselectedSources={deselectedSources}
               onToggleSource={toggleSourceSelection}
-              onSelectAll={selectAllVisibleSources}
+              onSelectAll={toggleAllVisibleSources}
               isArabic={isArabic}
             />
           );
         })}
+
+        {/* Uncategorized Sources */}
+        {uncategorizedSources.length > 0 && (
+          <TopicAccordion
+            key="uncategorized"
+            topic={{
+              id: 'uncategorized',
+              name_ar: 'مصادر أخرى',
+              name_en: 'Other Sources',
+              icon: 'folder-o',
+              is_active: true,
+              sort_order: 999,
+            }}
+            sources={uncategorizedSources}
+            isExpanded={expandedTopicId === 'uncategorized'}
+            onToggleExpand={() => setExpandedTopicId(
+              expandedTopicId === 'uncategorized' ? null : 'uncategorized'
+            )}
+            languageFilter={languageFilter}
+            onLanguageFilterChange={setLanguageFilter}
+            deselectedSources={deselectedSources}
+            onToggleSource={toggleSourceSelection}
+            onSelectAll={toggleAllVisibleSources}
+            isArabic={isArabic}
+          />
+        )}
       </ScrollView>
     </View>
   );

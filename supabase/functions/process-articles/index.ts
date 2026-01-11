@@ -19,7 +19,10 @@ interface RawArticle {
   full_content: string | null;
   content_quality: number | null;
   image_url: string | null;
+  video_url: string | null;
+  video_type: string | null;
   published_at: string | null;
+  retry_count: number;
   rss_source: {
     language: string;
     name: string;
@@ -92,7 +95,19 @@ ${content.slice(0, 3000)}`,
     throw new Error('No text content in Claude response');
   }
 
-  return JSON.parse(textContent.text);
+  // Strip markdown code blocks if present
+  let jsonText = textContent.text.trim();
+  if (jsonText.startsWith('```json')) {
+    jsonText = jsonText.slice(7);
+  } else if (jsonText.startsWith('```')) {
+    jsonText = jsonText.slice(3);
+  }
+  if (jsonText.endsWith('```')) {
+    jsonText = jsonText.slice(0, -3);
+  }
+  jsonText = jsonText.trim();
+
+  return JSON.parse(jsonText);
 }
 
 async function processArticle(
@@ -107,8 +122,8 @@ async function processArticle(
       .update({ status: 'processing' })
       .eq('id', article.id);
 
-    // Get content (prefer full content, fallback to description)
-    const content = article.original_content || article.original_description || '';
+    // Get content (prefer full_content from webpage scraping, fallback to RSS snippet)
+    const content = article.full_content || article.original_content || article.original_description || '';
 
     if (!content || content.length < 50) {
       await supabase
@@ -193,9 +208,11 @@ async function processArticle(
         why_it_matters_en: summary.why_it_matters_en,
         ai_quality_score: summary.quality_score,
         image_url: article.image_url,
+        video_url: article.video_url,
+        video_type: article.video_type,
         topic_ids: topicIds,
         published_at: article.published_at,
-        is_approved: false, // Requires admin approval
+        is_approved: true, // Auto-approved, admin can remove if needed
       })
       .select('id')
       .single();
@@ -223,7 +240,7 @@ async function processArticle(
       .update({
         status: 'failed',
         error_message: error.message,
-        retry_count: supabase.sql`retry_count + 1`,
+        retry_count: (article.retry_count || 0) + 1,
         processed_at: new Date().toISOString(),
       })
       .eq('id', article.id);

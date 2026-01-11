@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,10 +9,12 @@ import {
   RefreshControl,
 } from 'react-native';
 import { HistoryItemSkeleton } from '@/components/SkeletonLoader';
+import { SwipeableRow } from '@/components/SwipeableRow';
 import { FontAwesome } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useAppStore, useAuthStore } from '@/stores';
-import { useSavedStories, useUnsaveStory } from '@/hooks';
+import { useSavedStories, useUnsaveStory, useSaveStory } from '@/hooks';
+import { useToast } from '@/components/Toast';
 import type { SavedStory } from '@/types';
 
 export default function SavedScreen() {
@@ -24,6 +26,13 @@ export default function SavedScreen() {
   // React Query hooks
   const { data: savedStories = [], isLoading: loading, refetch, isRefetching: refreshing } = useSavedStories();
   const unsaveStoryMutation = useUnsaveStory();
+  const saveStoryMutation = useSaveStory();
+  const { showToast } = useToast();
+
+  // Track recently deleted item for undo
+  const [deletedItem, setDeletedItem] = useState<SavedStory | null>(null);
+  const undoTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const UNDO_DURATION = 4000; // 4 seconds to undo
 
   const onRefresh = useCallback(() => {
     refetch();
@@ -34,43 +43,82 @@ export default function SavedScreen() {
   };
 
   const handleRemove = (savedItem: SavedStory) => {
+    // Clear any existing undo timeout
+    if (undoTimeoutRef.current) {
+      clearTimeout(undoTimeoutRef.current);
+    }
+
+    // Store the deleted item for potential undo
+    setDeletedItem(savedItem);
+
+    // Perform the deletion
     unsaveStoryMutation.mutate(savedItem.story_id);
+
+    // Show toast with undo option
+    showToast({
+      message: isArabic ? 'تمت الإزالة - اضغط للتراجع' : 'Removed - Tap to undo',
+      type: 'info',
+      icon: 'undo',
+      duration: UNDO_DURATION,
+    });
+
+    // Set timeout to clear the deleted item reference
+    undoTimeoutRef.current = setTimeout(() => {
+      setDeletedItem(null);
+    }, UNDO_DURATION);
   };
+
+  const handleUndo = useCallback(() => {
+    if (deletedItem) {
+      saveStoryMutation.mutate(deletedItem.story_id);
+      setDeletedItem(null);
+      if (undoTimeoutRef.current) {
+        clearTimeout(undoTimeoutRef.current);
+      }
+      showToast({
+        message: isArabic ? 'تم استعادة الخبر' : 'Story restored',
+        type: 'success',
+        icon: 'bookmark',
+      });
+    }
+  }, [deletedItem, saveStoryMutation, isArabic, showToast]);
 
   const renderItem = ({ item }: { item: SavedStory }) => {
     if (!item.story) return null;
 
     return (
-      <TouchableOpacity
-        style={styles.storyCard}
-        onPress={() => handleStoryPress(item.story!.id)}
-        accessibilityRole="button"
-        accessibilityLabel={(isArabic ? item.story!.title_ar : item.story!.title_en) || undefined}
+      <SwipeableRow
+        onDelete={() => handleRemove(item)}
+        deleteText={isArabic ? 'إزالة' : 'Remove'}
       >
-        <Image
-          source={{ uri: item.story.image_url || 'https://via.placeholder.com/100' }}
-          style={styles.storyImage}
-        />
-        <View style={styles.storyContent}>
-          <Text
-            style={[styles.storyTitle, isArabic && styles.arabicText]}
-            numberOfLines={2}
-          >
-            {isArabic ? item.story.title_ar : item.story.title_en}
-          </Text>
-          <Text style={styles.storyMeta}>
-            {new Date(item.created_at).toLocaleDateString()}
-          </Text>
-        </View>
         <TouchableOpacity
-          style={styles.removeButton}
-          onPress={() => handleRemove(item)}
+          style={styles.storyCard}
+          onPress={() => handleStoryPress(item.story!.id)}
+          activeOpacity={0.9}
           accessibilityRole="button"
-          accessibilityLabel={isArabic ? 'إزالة من المحفوظات' : 'Remove from saved'}
+          accessibilityLabel={(isArabic ? item.story!.title_ar : item.story!.title_en) || undefined}
+          accessibilityHint={isArabic ? 'اسحب يساراً للإزالة' : 'Swipe left to remove'}
         >
-          <FontAwesome name="bookmark" size={20} color="#007AFF" />
+          <Image
+            source={{ uri: item.story.image_url || 'https://via.placeholder.com/100' }}
+            style={styles.storyImage}
+          />
+          <View style={styles.storyContent}>
+            <Text
+              style={[styles.storyTitle, isArabic && styles.arabicText]}
+              numberOfLines={2}
+            >
+              {isArabic ? item.story.title_ar : item.story.title_en}
+            </Text>
+            <Text style={styles.storyMeta}>
+              {new Date(item.created_at).toLocaleDateString()}
+            </Text>
+          </View>
+          <View style={styles.bookmarkIcon}>
+            <FontAwesome name="bookmark" size={20} color="#007AFF" />
+          </View>
         </TouchableOpacity>
-      </TouchableOpacity>
+      </SwipeableRow>
     );
   };
 
@@ -145,19 +193,43 @@ export default function SavedScreen() {
           </Text>
         </View>
       ) : (
-        <FlatList
-          data={savedStories}
-          renderItem={renderItem}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.list}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              tintColor="#fff"
-            />
-          }
-        />
+        <>
+          <FlatList
+            data={savedStories}
+            renderItem={renderItem}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.list}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor="#fff"
+              />
+            }
+            ListHeaderComponent={
+              savedStories.length > 0 ? (
+                <Text style={styles.swipeHint}>
+                  {isArabic ? '← اسحب يساراً للإزالة' : 'Swipe left to remove →'}
+                </Text>
+              ) : null
+            }
+          />
+
+          {/* Undo Button Overlay */}
+          {deletedItem && (
+            <TouchableOpacity
+              style={styles.undoButton}
+              onPress={handleUndo}
+              accessibilityRole="button"
+              accessibilityLabel={isArabic ? 'تراجع عن الإزالة' : 'Undo removal'}
+            >
+              <FontAwesome name="undo" size={16} color="#fff" />
+              <Text style={styles.undoText}>
+                {isArabic ? 'تراجع' : 'Undo'}
+              </Text>
+            </TouchableOpacity>
+          )}
+        </>
       )}
     </View>
   );
@@ -191,11 +263,17 @@ const styles = StyleSheet.create({
   list: {
     padding: 16,
   },
+  swipeHint: {
+    color: '#666',
+    fontSize: 12,
+    textAlign: 'center',
+    marginBottom: 12,
+    fontStyle: 'italic',
+  },
   storyCard: {
     flexDirection: 'row',
     backgroundColor: '#1a1a1a',
     borderRadius: 12,
-    marginBottom: 12,
     overflow: 'hidden',
   },
   storyImage: {
@@ -217,9 +295,31 @@ const styles = StyleSheet.create({
     color: '#888',
     fontSize: 12,
   },
-  removeButton: {
+  bookmarkIcon: {
     padding: 12,
     justifyContent: 'center',
+  },
+  undoButton: {
+    position: 'absolute',
+    bottom: 100,
+    alignSelf: 'center',
+    backgroundColor: '#007AFF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 25,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  undoText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
   emptyContainer: {
     flex: 1,
