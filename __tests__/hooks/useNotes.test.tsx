@@ -71,7 +71,7 @@ describe('useNotes', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     (getNotes as jest.Mock).mockResolvedValue(mockNotes);
-    (useAuthStore as jest.Mock).mockReturnValue({ user: { id: 'user123' } });
+    (useAuthStore as unknown as jest.Mock).mockReturnValue({ user: { id: 'user123' } });
   });
 
   it('should fetch notes for authenticated user', async () => {
@@ -85,7 +85,7 @@ describe('useNotes', () => {
   });
 
   it('should not fetch when user is not authenticated', async () => {
-    (useAuthStore as jest.Mock).mockReturnValue({ user: null });
+    (useAuthStore as unknown as jest.Mock).mockReturnValue({ user: null });
 
     const wrapper = createWrapper();
     const { result } = renderHook(() => useNotes(), { wrapper });
@@ -122,7 +122,7 @@ describe('useCreateNote', () => {
     jest.clearAllMocks();
     (createNote as jest.Mock).mockResolvedValue({ id: 'newNote', content: 'New note content' });
     (getNotes as jest.Mock).mockResolvedValue(mockNotes);
-    (useAuthStore as jest.Mock).mockReturnValue({ user: { id: 'user123' } });
+    (useAuthStore as unknown as jest.Mock).mockReturnValue({ user: { id: 'user123' } });
   });
 
   it('should create a note', async () => {
@@ -190,7 +190,7 @@ describe('useUpdateNote', () => {
     jest.clearAllMocks();
     (updateNote as jest.Mock).mockResolvedValue({ id: 'note1', content: 'Updated content' });
     (getNotes as jest.Mock).mockResolvedValue(mockNotes);
-    (useAuthStore as jest.Mock).mockReturnValue({ user: { id: 'user123' } });
+    (useAuthStore as unknown as jest.Mock).mockReturnValue({ user: { id: 'user123' } });
   });
 
   it('should update a note', async () => {
@@ -229,7 +229,7 @@ describe('useDeleteNote', () => {
     jest.clearAllMocks();
     (deleteNote as jest.Mock).mockResolvedValue({ success: true });
     (getNotes as jest.Mock).mockResolvedValue(mockNotes);
-    (useAuthStore as jest.Mock).mockReturnValue({ user: { id: 'user123' } });
+    (useAuthStore as unknown as jest.Mock).mockReturnValue({ user: { id: 'user123' } });
   });
 
   it('should delete a note', async () => {

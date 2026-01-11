@@ -66,7 +66,7 @@ describe('useBlockedSources', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     (getBlockedSources as jest.Mock).mockResolvedValue(mockBlockedSources);
-    (useAuthStore as jest.Mock).mockReturnValue({ user: { id: 'user123' } });
+    (useAuthStore as unknown as jest.Mock).mockReturnValue({ user: { id: 'user123' } });
   });
 
   it('should fetch blocked sources for authenticated user', async () => {
@@ -80,7 +80,7 @@ describe('useBlockedSources', () => {
   });
 
   it('should not fetch when user is not authenticated', async () => {
-    (useAuthStore as jest.Mock).mockReturnValue({ user: null });
+    (useAuthStore as unknown as jest.Mock).mockReturnValue({ user: null });
 
     const wrapper = createWrapper();
     const { result } = renderHook(() => useBlockedSources(), { wrapper });
@@ -105,7 +105,7 @@ describe('useBlockedSourceIds', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     (getBlockedSourceIds as jest.Mock).mockResolvedValue(mockBlockedSourceIds);
-    (useAuthStore as jest.Mock).mockReturnValue({ user: { id: 'user123' } });
+    (useAuthStore as unknown as jest.Mock).mockReturnValue({ user: { id: 'user123' } });
   });
 
   it('should fetch blocked source IDs for authenticated user', async () => {
@@ -119,7 +119,7 @@ describe('useBlockedSourceIds', () => {
   });
 
   it('should not fetch when user is not authenticated', async () => {
-    (useAuthStore as jest.Mock).mockReturnValue({ user: null });
+    (useAuthStore as unknown as jest.Mock).mockReturnValue({ user: null });
 
     const wrapper = createWrapper();
     const { result } = renderHook(() => useBlockedSourceIds(), { wrapper });
@@ -146,7 +146,7 @@ describe('useBlockSource', () => {
     (blockSource as jest.Mock).mockResolvedValue({ success: true });
     (getBlockedSources as jest.Mock).mockResolvedValue(mockBlockedSources);
     (getBlockedSourceIds as jest.Mock).mockResolvedValue(mockBlockedSourceIds);
-    (useAuthStore as jest.Mock).mockReturnValue({ user: { id: 'user123' } });
+    (useAuthStore as unknown as jest.Mock).mockReturnValue({ user: { id: 'user123' } });
   });
 
   it('should block a source', async () => {
@@ -180,7 +180,7 @@ describe('useUnblockSource', () => {
     (unblockSource as jest.Mock).mockResolvedValue({ success: true });
     (getBlockedSources as jest.Mock).mockResolvedValue(mockBlockedSources);
     (getBlockedSourceIds as jest.Mock).mockResolvedValue(mockBlockedSourceIds);
-    (useAuthStore as jest.Mock).mockReturnValue({ user: { id: 'user123' } });
+    (useAuthStore as unknown as jest.Mock).mockReturnValue({ user: { id: 'user123' } });
   });
 
   it('should unblock a source', async () => {

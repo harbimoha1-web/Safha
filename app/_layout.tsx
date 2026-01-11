@@ -260,7 +260,7 @@ function RootLayoutNav() {
     const { selectedTopics, setSelectedTopics, setOnboarded } = useAppStore.getState();
 
     // Check if any selected topic has an invalid (non-UUID) ID
-    const hasInvalidTopics = selectedTopics.some((t) => !UUID_REGEX.test(t.id));
+    const hasInvalidTopics = selectedTopics.some((t: { id: string }) => !UUID_REGEX.test(t.id));
 
     if (hasInvalidTopics) {
       console.warn('[Safha] Clearing invalid cached topics (legacy mock data detected)');

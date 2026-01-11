@@ -80,7 +80,7 @@ describe('useStories', () => {
     jest.clearAllMocks();
     (getStories as jest.Mock).mockResolvedValue(mockStories);
     (useBlockedSourceIds as jest.Mock).mockReturnValue({ data: [] });
-    (useAppStore as jest.Mock).mockReturnValue({ deselectedSources: [] });
+    (useAppStore as unknown as jest.Mock).mockReturnValue({ deselectedSources: [] });
   });
 
   it('should fetch stories on mount', async () => {
@@ -130,7 +130,7 @@ describe('useStories', () => {
     const blockedIds = ['blocked1'];
     const deselectedIds = ['deselected1'];
     (useBlockedSourceIds as jest.Mock).mockReturnValue({ data: blockedIds });
-    (useAppStore as jest.Mock).mockReturnValue({ deselectedSources: deselectedIds });
+    (useAppStore as unknown as jest.Mock).mockReturnValue({ deselectedSources: deselectedIds });
 
     const wrapper = createWrapper();
     const { result } = renderHook(() => useStories(), { wrapper });
@@ -151,7 +151,7 @@ describe('useStories', () => {
     const blockedIds = ['source1', 'source2'];
     const deselectedIds = ['source1', 'source3'];
     (useBlockedSourceIds as jest.Mock).mockReturnValue({ data: blockedIds });
-    (useAppStore as jest.Mock).mockReturnValue({ deselectedSources: deselectedIds });
+    (useAppStore as unknown as jest.Mock).mockReturnValue({ deselectedSources: deselectedIds });
 
     const wrapper = createWrapper();
     const { result } = renderHook(() => useStories(), { wrapper });

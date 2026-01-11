@@ -33,7 +33,7 @@ export default function OnboardingScreen() {
   // Hydrate local state from store on mount (for editing existing selections)
   useEffect(() => {
     if (selectedTopics.length > 0) {
-      setSelectedIds(new Set(selectedTopics.map((t) => t.id)));
+      setSelectedIds(new Set(selectedTopics.map((t: Topic) => t.id)));
     }
   }, []);
 

@@ -96,8 +96,8 @@ describe('Content Pipeline Integration', () => {
         .limit(10);
 
       expect(sources).toHaveLength(1);
-      expect(sources[0].name).toBe('Tech News Daily');
-      expect(sources[0].is_active).toBe(true);
+      expect(sources![0].name).toBe('Tech News Daily');
+      expect(sources![0].is_active).toBe(true);
     });
 
     it('should skip sources with too many errors', async () => {
@@ -131,7 +131,7 @@ describe('Content Pipeline Integration', () => {
 
       // Source with error_count=5 should be excluded
       expect(sources).toHaveLength(2);
-      expect(sources.every((s: typeof mockRSSSource) => s.error_count < 5)).toBe(true);
+      expect(sources!.every((s: typeof mockRSSSource) => s.error_count < 5)).toBe(true);
     });
 
     it('should update source after successful fetch', async () => {
@@ -207,8 +207,8 @@ describe('Content Pipeline Integration', () => {
         .limit(10);
 
       expect(articles).toHaveLength(1);
-      expect(articles[0].status).toBe('pending');
-      expect(articles[0].rss_source.name).toBe('Tech News Daily');
+      expect(articles![0].status).toBe('pending');
+      expect(articles![0].rss_source.name).toBe('Tech News Daily');
     });
 
     it('should skip articles with too many retries', async () => {
@@ -342,7 +342,7 @@ describe('Content Pipeline Integration', () => {
         .single();
 
       expect(error).toBeNull();
-      expect(story.id).toBe('story-1');
+      expect(story!.id).toBe('story-1');
     });
 
     it('should link story back to raw article', async () => {
@@ -426,7 +426,7 @@ describe('Content Pipeline Integration', () => {
         .in('slug', topicSlugs);
 
       expect(topics).toHaveLength(2);
-      expect(topics.map((t: typeof mockTopic) => t.id)).toContain('topic-tech');
+      expect(topics!.map((t: { id: string; slug: string }) => t.id)).toContain('topic-tech');
     });
 
     it('should handle unknown topic slugs gracefully', async () => {
@@ -547,7 +547,7 @@ describe('Content Pipeline Integration', () => {
         .select('id')
         .single();
 
-      expect(newSource.id).toBe('new-source-id');
+      expect(newSource!.id).toBe('new-source-id');
     });
   });
 });
