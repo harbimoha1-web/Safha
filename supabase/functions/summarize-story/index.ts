@@ -14,6 +14,23 @@ interface SummarizeRequest {
   title: string;
   content: string;
   source_language: 'ar' | 'en';
+  reliability_score?: number;
+}
+
+// Model tiers for cost optimization
+const MODELS = {
+  premium: 'claude-sonnet-4-20250514',  // Higher quality, higher cost
+  standard: 'claude-3-5-haiku-20241022', // Good quality, ~4x cheaper
+} as const;
+
+/**
+ * Select AI model based on source reliability score
+ * - High reliability sources (>0.7) get Sonnet for best quality
+ * - Standard sources get Haiku for cost efficiency
+ */
+function selectModel(reliabilityScore?: number): string {
+  const score = reliabilityScore ?? 0.5;
+  return score > 0.7 ? MODELS.premium : MODELS.standard;
 }
 
 interface AISummaryResponse {
@@ -50,7 +67,8 @@ async function summarizeWithClaude(
   title: string,
   content: string,
   sourceLanguage: string,
-  apiKey: string
+  apiKey: string,
+  model: string
 ): Promise<AISummaryResponse> {
   const userMessage = `Please summarize this article:
 
@@ -69,7 +87,7 @@ Source language: ${sourceLanguage}`;
       'anthropic-version': '2023-06-01',
     },
     body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
+      model,
       max_tokens: 1024,
       system: SUMMARIZE_PROMPT,
       messages: [{ role: 'user', content: userMessage }],
@@ -112,7 +130,7 @@ serve(async (req) => {
     }
 
     // Parse request body
-    const { story_id, title, content, source_language }: SummarizeRequest = await req.json();
+    const { story_id, title, content, source_language, reliability_score }: SummarizeRequest = await req.json();
 
     if (!story_id || !title || !content) {
       return new Response(
@@ -121,12 +139,17 @@ serve(async (req) => {
       );
     }
 
+    // Select model based on source reliability (cost optimization)
+    const model = selectModel(reliability_score);
+    console.log(`Using model ${model} for story ${story_id} (reliability: ${reliability_score ?? 'unknown'})`);
+
     // Generate summary with Claude
     const summary = await summarizeWithClaude(
       title,
       content,
       source_language || 'en',
-      claudeApiKey
+      claudeApiKey,
+      model
     );
 
     // Create Supabase client with service role key
@@ -164,6 +187,7 @@ serve(async (req) => {
         success: true,
         story: data,
         summary,
+        model_used: model,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

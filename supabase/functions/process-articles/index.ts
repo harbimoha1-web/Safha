@@ -39,6 +39,21 @@ interface AISummaryResponse {
   topics: string[];
 }
 
+// Model tiers for cost optimization
+const MODELS = {
+  premium: 'claude-sonnet-4-20250514',  // Higher quality, higher cost
+  standard: 'claude-3-5-haiku-20241022', // Good quality, ~4x cheaper
+} as const;
+
+/**
+ * Select AI model based on source reliability score
+ * - High reliability sources (>0.7) get Sonnet for best quality
+ * - Standard sources get Haiku for cost efficiency
+ */
+function selectModel(reliabilityScore: number): string {
+  return reliabilityScore > 0.7 ? MODELS.premium : MODELS.standard;
+}
+
 const SUMMARIZE_PROMPT = `You are a news summarization AI for Safha, a Saudi Arabian news app.
 
 Summarize news articles for busy professionals in 15-30 second reads.
@@ -58,7 +73,8 @@ async function summarizeWithClaude(
   content: string,
   sourceLanguage: string,
   sourceName: string,
-  apiKey: string
+  apiKey: string,
+  model: string
 ): Promise<AISummaryResponse> {
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -68,7 +84,7 @@ async function summarizeWithClaude(
       'anthropic-version': '2023-06-01',
     },
     body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
+      model,
       max_tokens: 1024,
       system: SUMMARIZE_PROMPT,
       messages: [{
@@ -114,7 +130,7 @@ async function processArticle(
   article: RawArticle,
   supabase: any,
   claudeApiKey: string
-): Promise<{ success: boolean; story_id?: string; error?: string }> {
+): Promise<{ success: boolean; story_id?: string; error?: string; model_used?: string }> {
   try {
     // Mark as processing
     await supabase
@@ -137,13 +153,18 @@ async function processArticle(
       return { success: false, error: 'Content too short' };
     }
 
+    // Select model based on source reliability (cost optimization)
+    const model = selectModel(article.rss_source.reliability_score);
+    console.log(`Processing "${article.original_title?.slice(0, 30)}..." with ${model} (reliability: ${article.rss_source.reliability_score})`);
+
     // Generate AI summary
     const summary = await summarizeWithClaude(
       article.original_title,
       content,
       article.rss_source.language,
       article.rss_source.name,
-      claudeApiKey
+      claudeApiKey,
+      model
     );
 
     // Check quality threshold
@@ -231,7 +252,7 @@ async function processArticle(
       })
       .eq('id', article.id);
 
-    return { success: true, story_id: story.id };
+    return { success: true, story_id: story.id, model_used: model };
 
   } catch (error) {
     // Mark as failed
@@ -319,6 +340,10 @@ serve(async (req) => {
       total_processed: results.length,
       successful: results.filter(r => r.success).length,
       failed: results.filter(r => !r.success).length,
+      models: {
+        premium: results.filter(r => r.model_used === MODELS.premium).length,
+        standard: results.filter(r => r.model_used === MODELS.standard).length,
+      },
     };
 
     return new Response(

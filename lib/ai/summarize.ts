@@ -3,6 +3,24 @@
 
 import type { AISummaryRequest, AISummaryResponse } from '@/types';
 
+// Model tiers for cost optimization
+export const AI_MODELS = {
+  premium: 'claude-sonnet-4-20250514',  // Higher quality, higher cost
+  standard: 'claude-3-5-haiku-20241022', // Good quality, ~4x cheaper
+} as const;
+
+export type AIModelTier = keyof typeof AI_MODELS;
+
+/**
+ * Select AI model based on source reliability score
+ * - High reliability sources (>0.7) get Sonnet for best quality
+ * - Standard sources get Haiku for cost efficiency
+ */
+export function selectModel(reliabilityScore?: number): string {
+  const score = reliabilityScore ?? 0.5;
+  return score > 0.7 ? AI_MODELS.premium : AI_MODELS.standard;
+}
+
 const SUMMARIZE_PROMPT = `You are a news summarization AI for Safha, a Saudi Arabian news app targeting busy professionals.
 
 Your task is to summarize news articles in a way that can be read in 15-30 seconds.
@@ -33,14 +51,24 @@ interface ClaudeResponse {
   content: Array<{ type: string; text: string }>;
 }
 
+export interface SummarizeOptions {
+  reliabilityScore?: number;
+}
+
 /**
  * Summarize an article using Claude AI
  * This function is meant to be called from a Supabase Edge Function
+ * @param request - The article to summarize
+ * @param apiKey - Claude API key
+ * @param options - Optional settings including reliabilityScore for model selection
  */
 export async function summarizeArticle(
   request: AISummaryRequest,
-  apiKey: string
+  apiKey: string,
+  options?: SummarizeOptions
 ): Promise<AISummaryResponse> {
+  const model = selectModel(options?.reliabilityScore);
+
   const userMessage = `Please summarize this article:
 
 Title: ${request.title}
@@ -62,7 +90,7 @@ Source language: ${request.source_language}`;
       'anthropic-version': '2023-06-01',
     },
     body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
+      model,
       max_tokens: 1024,
       system: SUMMARIZE_PROMPT,
       messages,
@@ -89,11 +117,16 @@ Source language: ${request.source_language}`;
   }
 }
 
+export interface BatchSummarizeRequest extends AISummaryRequest {
+  reliabilityScore?: number;
+}
+
 /**
  * Batch summarize multiple articles
+ * Each article can have its own reliabilityScore for model selection
  */
 export async function batchSummarize(
-  requests: AISummaryRequest[],
+  requests: BatchSummarizeRequest[],
   apiKey: string,
   concurrency = 3
 ): Promise<AISummaryResponse[]> {
@@ -102,7 +135,7 @@ export async function batchSummarize(
   for (let i = 0; i < requests.length; i += concurrency) {
     const batch = requests.slice(i, i + concurrency);
     const batchResults = await Promise.all(
-      batch.map(req => summarizeArticle(req, apiKey))
+      batch.map(req => summarizeArticle(req, apiKey, { reliabilityScore: req.reliabilityScore }))
     );
     results.push(...batchResults);
   }
