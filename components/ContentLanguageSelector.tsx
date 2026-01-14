@@ -6,10 +6,10 @@ import Animated, {
   FadeIn,
 } from 'react-native-reanimated';
 import { FontAwesome } from '@expo/vector-icons';
-import { useTheme } from '@/contexts/ThemeContext';
+import { useTheme, type ThemeColors } from '@/contexts/ThemeContext';
 import { useAppStore } from '@/stores';
 import { spacing, fontSize, fontWeight, borderRadius } from '@/constants/theme';
-import type { ContentLanguage } from '@/types';
+import type { ContentLanguage, IconName } from '@/types';
 
 interface ContentLanguageSelectorProps {
   isArabic: boolean;
@@ -25,9 +25,9 @@ function LanguagePill({
 }: {
   isActive: boolean;
   onPress: () => void;
-  icon: string;
+  icon: IconName;
   label: string;
-  colors: any;
+  colors: ThemeColors;
 }) {
   const scale = useSharedValue(1);
 
@@ -66,7 +66,7 @@ function LanguagePill({
         accessibilityState={{ selected: isActive }}
       >
         <FontAwesome
-          name={icon as any}
+          name={icon}
           size={16}
           color={isActive ? '#fff' : colors.textMuted}
         />

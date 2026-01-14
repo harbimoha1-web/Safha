@@ -15,6 +15,7 @@ import { FontAwesome } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { HapticFeedback } from '@/lib/haptics';
 import { useAppStore } from '@/stores';
+import type { IconName } from '@/types';
 
 const { width } = Dimensions.get('window');
 const MAX_VISIBLE_TOASTS = 3;
@@ -25,7 +26,7 @@ interface ToastConfig {
   message: string;
   type?: ToastType;
   duration?: number;
-  icon?: string;
+  icon?: IconName;
 }
 
 interface ToastItem extends ToastConfig {
@@ -142,7 +143,7 @@ function ToastView({
       ]}
     >
       <FontAwesome
-        name={(toast.icon as any) || typeStyles.icon}
+        name={toast.icon || typeStyles.icon}
         size={20}
         color={typeStyles.iconColor}
       />

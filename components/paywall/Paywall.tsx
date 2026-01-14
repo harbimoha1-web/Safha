@@ -7,6 +7,7 @@ import { router } from 'expo-router';
 import { useAppStore } from '@/stores';
 import { SUBSCRIPTION_PLANS } from '@/lib/payments/moyasar';
 import { colors, spacing, borderRadius, fontSize, fontWeight } from '@/constants';
+import type { IconName } from '@/types';
 
 interface PaywallProps {
   feature: string;
@@ -107,13 +108,13 @@ function BenefitItem({
   text,
   isArabic,
 }: {
-  icon: string;
+  icon: IconName;
   text: string;
   isArabic: boolean;
 }) {
   return (
     <View style={[styles.benefitItem, isArabic && styles.benefitItemRtl]}>
-      <FontAwesome name={icon as any} size={16} color={colors.success} />
+      <FontAwesome name={icon} size={16} color={colors.success} />
       <Text style={[styles.benefitText, isArabic && styles.arabicText]}>
         {text}
       </Text>

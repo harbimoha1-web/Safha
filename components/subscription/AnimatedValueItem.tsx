@@ -10,9 +10,10 @@ import {
 import { FontAwesome } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
 import { premiumColors, spacing, fontSize, fontWeight } from '@/constants';
+import type { IconName } from '@/types';
 
 interface AnimatedValueItemProps {
-  icon: string;
+  icon: IconName;
   text: string;
   value: string;
   index: number;
@@ -110,7 +111,7 @@ export function AnimatedValueItem({
             { transform: [{ scale: iconScale }] },
           ]}
         >
-          <FontAwesome name={icon as any} size={18} color={colors.primary} />
+          <FontAwesome name={icon} size={18} color={colors.primary} />
         </Animated.View>
         <Text style={[styles.text, { color: colors.textPrimary }, isArabic && styles.arabicText]}>
           {text}

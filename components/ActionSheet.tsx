@@ -13,11 +13,12 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { useAppStore } from '@/stores';
 import { HapticFeedback } from '@/lib/haptics';
 import { spacing, borderRadius, fontSize, fontWeight } from '@/constants';
+import type { IconName } from '@/types';
 
 export interface ActionSheetOption {
   label: string;
   labelAr: string;
-  icon: string;
+  icon: IconName;
   iconColor?: string;
   destructive?: boolean;
   onPress: () => void;
@@ -90,7 +91,7 @@ export function ActionSheet({ visible, onClose, title, titleAr, options }: Actio
                   accessibilityLabel={isArabic ? option.labelAr : option.label}
                 >
                   <FontAwesome
-                    name={option.icon as any}
+                    name={option.icon}
                     size={20}
                     color={option.destructive ? colors.error : (option.iconColor || colors.primary)}
                   />

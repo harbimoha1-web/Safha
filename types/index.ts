@@ -1,5 +1,74 @@
 // Safha App Type Definitions
 
+import type { ComponentProps } from 'react';
+import type FontAwesome from '@expo/vector-icons/FontAwesome';
+
+// FontAwesome icon name type - use this instead of `as any` casts
+export type IconName = ComponentProps<typeof FontAwesome>['name'];
+
+// Common UI icons used throughout the app
+export type UIIconName =
+  | 'check'
+  | 'times'
+  | 'chevron-right'
+  | 'chevron-left'
+  | 'chevron-down'
+  | 'chevron-up'
+  | 'arrow-left'
+  | 'arrow-right'
+  | 'tag'
+  | 'cog'
+  | 'bell'
+  | 'user'
+  | 'search'
+  | 'plus'
+  | 'minus'
+  | 'edit'
+  | 'trash'
+  | 'share'
+  | 'bookmark'
+  | 'heart'
+  | 'star'
+  | 'info-circle'
+  | 'exclamation-circle'
+  | 'question-circle'
+  | 'check-circle'
+  | 'times-circle'
+  | 'external-link'
+  | 'refresh'
+  | 'spinner'
+  | 'ellipsis-h'
+  | 'ellipsis-v'
+  | 'bars'
+  | 'home'
+  | 'history'
+  | 'clock-o'
+  | 'calendar'
+  | 'globe'
+  | 'language'
+  | 'sign-out'
+  | 'crown'
+  | 'trophy'
+  | 'fire'
+  | 'bolt'
+  | 'rocket'
+  | 'shield'
+  | 'lock'
+  | 'unlock'
+  | 'eye'
+  | 'eye-slash'
+  | 'volume-up'
+  | 'volume-off'
+  | 'play'
+  | 'pause'
+  | 'stop'
+  | 'image'
+  | 'file-text-o'
+  | 'link'
+  | 'ban'
+  | 'flag'
+  | 'warning';
+
 export type UserRole = 'user' | 'admin' | 'moderator';
 
 export interface Profile {

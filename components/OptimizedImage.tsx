@@ -13,11 +13,15 @@ import {
 import { FontAwesome } from '@expo/vector-icons';
 import { getOptimizedImageUrl } from '@/lib/image';
 import { useTheme } from '@/contexts/ThemeContext';
+import { createLogger } from '@/lib/debug';
+import type { IconName } from '@/types';
+
+const log = createLogger('Image');
 
 interface OptimizedImageProps extends Omit<ImageProps, 'source'> {
   url: string | null | undefined;
   style?: StyleProp<ImageStyle>;
-  fallbackIcon?: string;
+  fallbackIcon?: IconName;
   fallbackIconSize?: number;
   width?: number;
   height?: number;
@@ -45,11 +49,11 @@ export function OptimizedImage({
   const handleError = useCallback(() => {
     if (!useOriginalUrl && url) {
       // First failure: optimized URL failed, try original
-      console.warn('[Image] Optimized URL failed, trying original:', url?.substring(0, 80));
+      log.debug('Optimized URL failed, trying original:', url?.substring(0, 80));
       setUseOriginalUrl(true);
     } else {
       // Both failed, show fallback
-      console.warn('[Image] Both URLs failed, showing fallback:', url?.substring(0, 80));
+      log.debug('Both URLs failed, showing fallback:', url?.substring(0, 80));
       setHasError(true);
     }
   }, [useOriginalUrl, url]);
@@ -62,7 +66,7 @@ export function OptimizedImage({
     return (
       <View style={[styles.fallback, { backgroundColor: colors.surface }, style]}>
         <FontAwesome
-          name={fallbackIcon as any}
+          name={fallbackIcon}
           size={fallbackIconSize}
           color={colors.textMuted}
         />
@@ -124,7 +128,7 @@ export function OptimizedImageBackground({
     return (
       <View style={[styles.fallbackBackground, { backgroundColor: colors.surface }, style]}>
         <FontAwesome
-          name={fallbackIcon as any}
+          name={fallbackIcon}
           size={fallbackIconSize}
           color={colors.textMuted}
           style={styles.fallbackBackgroundIcon}

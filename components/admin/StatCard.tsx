@@ -2,11 +2,12 @@ import { View, Text, StyleSheet } from 'react-native';
 import { FontAwesome } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
 import { spacing, fontSize, fontWeight, borderRadius } from '@/constants/theme';
+import type { IconName } from '@/types';
 
 interface StatCardProps {
   title: string;
   value: number | string;
-  icon: string;
+  icon: IconName;
   color: string;
   subtitle?: string;
   compact?: boolean;
@@ -23,7 +24,7 @@ export function StatCard({ title, value, icon, color, subtitle, compact }: StatC
     return (
       <View style={[styles.compactCard, { backgroundColor: colors.surface }]}>
         <View style={[styles.compactIcon, { backgroundColor: `${color}20` }]}>
-          <FontAwesome name={icon as any} size={16} color={color} />
+          <FontAwesome name={icon} size={16} color={color} />
         </View>
         <View style={styles.compactContent}>
           <Text style={[styles.compactValue, { color: colors.textPrimary }]}>
@@ -40,7 +41,7 @@ export function StatCard({ title, value, icon, color, subtitle, compact }: StatC
   return (
     <View style={[styles.card, { backgroundColor: colors.surface }]}>
       <View style={[styles.iconContainer, { backgroundColor: `${color}20` }]}>
-        <FontAwesome name={icon as any} size={20} color={color} />
+        <FontAwesome name={icon} size={20} color={color} />
       </View>
       <Text style={[styles.value, { color: colors.textPrimary }]}>
         {formattedValue}
