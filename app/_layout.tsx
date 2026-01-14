@@ -3,6 +3,9 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { colors, spacing, borderRadius, fontSize, fontWeight } from '@/constants';
 import { captureException } from '@/lib/errorTracking';
+import { createLogger } from '@/lib/debug';
+
+const log = createLogger('App');
 
 // Global Error Boundary for runtime errors
 class AppErrorBoundary extends React.Component<
@@ -19,7 +22,7 @@ class AppErrorBoundary extends React.Component<
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error('App Error Boundary caught:', error, errorInfo);
+    log.error('App Error Boundary caught:', error, errorInfo);
     // Report error to tracking service
     captureException(error, {
       componentStack: errorInfo.componentStack,
@@ -147,27 +150,27 @@ function useProtectedRoute(onError: (error: string) => void, onReady: () => void
         didComplete = true;
         clearTimeout(timeoutId);
         if (error) {
-          console.error('Auth error:', error);
+          log.error('Auth error:', error);
           onError(`Auth error: ${error.message}`);
           return;
         }
         setSession(session);
         if (session) {
-          fetchProfile().catch(console.error);
+          fetchProfile().catch(log.error);
         }
         onReady();
       })
       .catch((err) => {
         didComplete = true;
         clearTimeout(timeoutId);
-        console.error('Session error:', err);
+        log.error('Session error:', err);
         onError(`Failed to connect: ${err.message}`);
       });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       if (session) {
-        fetchProfile().catch(console.error);
+        fetchProfile().catch(log.error);
       }
     });
 
@@ -268,7 +271,7 @@ function RootLayoutNav() {
     const hasInvalidTopics = selectedTopics.some((t) => !UUID_REGEX.test(t.id));
 
     if (hasInvalidTopics) {
-      console.warn('[Safha] Clearing invalid cached topics (legacy mock data detected)');
+      log.warn('[Safha] Clearing invalid cached topics (legacy mock data detected)');
       setSelectedTopics([]); // Clear invalid topics
       setOnboarded(false); // Force re-onboarding with real topics
     }

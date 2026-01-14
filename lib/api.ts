@@ -11,6 +11,9 @@ import {
   validateInput,
   ValidationError,
 } from './validators';
+import { createLogger } from './debug';
+
+const log = createLogger('API');
 
 // Custom API Error class
 export class APIError extends Error {
@@ -104,13 +107,13 @@ export async function getUnseenStories(
     p_blocked_source_ids: blockedSourceIds || null,
   });
 
-  console.log('[getUnseenStories] RPC params:', { userId: validUserId, limit: validated.limit, offset: validated.offset, topicIds: validated.topicIds, contentLanguage });
-  console.log('[getUnseenStories] RPC returned:', data?.length ?? 0, 'stories, error:', error?.message ?? 'none');
+  log.debug('[getUnseenStories] RPC params:', { userId: validUserId, limit: validated.limit, offset: validated.offset, topicIds: validated.topicIds, contentLanguage });
+  log.debug('[getUnseenStories] RPC returned:', data?.length ?? 0, 'stories, error:', error?.message ?? 'none');
 
   if (error) {
     // Fallback to regular getStories if RPC doesn't exist yet
     if (error.code === 'PGRST202' || error.message?.includes('function')) {
-      console.warn('get_unseen_stories RPC not available, falling back to getStories');
+      log.warn('get_unseen_stories RPC not available, falling back to getStories');
       return getStories(limit, offset, topicIds, blockedSourceIds, contentLanguage);
     }
     throw new APIError(`Failed to fetch unseen stories: ${error.message}`, 500, error.code);
@@ -124,7 +127,7 @@ export async function getUnseenStories(
       .select(STORY_SELECT)
       .in('id', storyIds);
 
-    console.log('[getUnseenStories] Fetched with sources:', storiesWithSources?.length ?? 0);
+    log.debug('[getUnseenStories] Fetched with sources:', storiesWithSources?.length ?? 0);
 
     if (storiesWithSources) {
       // Preserve order from RPC results
@@ -135,16 +138,16 @@ export async function getUnseenStories(
       if (contentLanguage && contentLanguage !== 'all') {
         const beforeFilter = stories.length;
         stories = stories.filter((s: Story) => !s.source || s.source.language === contentLanguage);
-        console.log('[getUnseenStories] Language filter:', beforeFilter, '->', stories.length);
+        log.debug('[getUnseenStories] Language filter:', beforeFilter, '->', stories.length);
       }
 
-      console.log('[getUnseenStories] Returning:', stories.length, 'stories');
+      log.debug('[getUnseenStories] Returning:', stories.length, 'stories');
       return stories;
     }
   }
 
   // No unseen stories available - return empty, let UI show "caught up" state
-  console.log('[getUnseenStories] No unseen stories available');
+  log.debug('[getUnseenStories] No unseen stories available');
   return [];
 }
 
@@ -165,7 +168,7 @@ export async function getNewStoryCount(
   if (error) {
     // Return 0 if RPC doesn't exist yet
     if (error.code === 'PGRST202' || error.message?.includes('function')) {
-      console.warn('get_new_story_count RPC not available');
+      log.warn('get_new_story_count RPC not available');
       return 0;
     }
     throw new APIError(`Failed to get new story count: ${error.message}`, 500, error.code);
@@ -217,7 +220,7 @@ export async function fetchStoryContent(
   const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!supabaseUrl || !supabaseAnonKey) {
-    console.error('Supabase config missing');
+    log.error('Supabase config missing');
     return { content: null, quality: 0 };
   }
 
@@ -251,7 +254,7 @@ export async function fetchStoryContent(
 
       // Retry on 502/503/504 errors (cold start / transient)
       if (response.status >= 502 && response.status <= 504) {
-        console.log(`Fetch attempt ${attempt} failed with ${response.status}, retrying...`);
+        log.debug(`Fetch attempt ${attempt} failed with ${response.status}, retrying...`);
         lastError = new Error(`HTTP ${response.status}`);
         if (attempt < maxRetries) {
           await new Promise(r => setTimeout(r, attempt * 1000));
@@ -262,7 +265,7 @@ export async function fetchStoryContent(
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('Fetch content error:', response.status, errorText);
+        log.error('Fetch content error:', response.status, errorText);
         return { content: null, quality: 0 };
       }
 
@@ -270,22 +273,22 @@ export async function fetchStoryContent(
 
       if (data?.success && data.content) {
         if (attempt > 1) {
-          console.log(`Fetch succeeded on attempt ${attempt}`);
+          log.debug(`Fetch succeeded on attempt ${attempt}`);
         }
         return { content: data.content, quality: data.quality || 0 };
       }
 
       if (data && !data.success) {
-        console.log('Content extraction failed:', data?.method, data?.error);
+        log.debug('Content extraction failed:', data?.method, data?.error);
       }
 
       return { content: null, quality: 0 };
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
       if (lastError.name === 'AbortError') {
-        console.log(`Fetch attempt ${attempt} timed out`);
+        log.debug(`Fetch attempt ${attempt} timed out`);
       } else {
-        console.log(`Fetch attempt ${attempt} error:`, lastError.message);
+        log.debug(`Fetch attempt ${attempt} error:`, lastError.message);
       }
 
       if (attempt < maxRetries) {
@@ -295,7 +298,7 @@ export async function fetchStoryContent(
     }
   }
 
-  console.error('All fetch attempts failed:', lastError);
+  log.error('All fetch attempts failed:', lastError);
   return { content: null, quality: 0 };
 }
 
@@ -646,7 +649,7 @@ export async function searchStories(
 
     if (error) {
       // Fallback to exact match if RPC fails (e.g., function doesn't exist yet)
-      console.warn('Fuzzy search failed, falling back to exact match:', error.message);
+      log.warn('Fuzzy search failed, falling back to exact match:', error.message);
       return searchStoriesExact(validQuery, validLimit);
     }
 
@@ -668,7 +671,7 @@ export async function searchStories(
     return data || [];
   } catch (err) {
     // Fallback to exact match on any error
-    console.warn('Search error, falling back to exact match:', err);
+    log.warn('Search error, falling back to exact match:', err);
     return searchStoriesExact(validQuery, validLimit);
   }
 }
@@ -717,7 +720,7 @@ export async function getDailySummaryStories(
   if (error) {
     // Handle missing table gracefully for demo mode
     if (error.code === 'PGRST205' || error.message?.includes('schema cache')) {
-      console.log('Demo mode: Using sample stories for summary');
+      log.debug('Demo mode: Using sample stories for summary');
       return [];
     }
     throw new APIError(`Failed to fetch summary stories: ${error.message}`, 500, error.code);
@@ -803,7 +806,7 @@ export async function getTopicSourceMapping(): Promise<TopicSourceMapping[]> {
   if (error) {
     // Handle missing function gracefully for development
     if (error.code === 'PGRST202' || error.message?.includes('function')) {
-      console.log('Topic-source mapping function not available, returning empty');
+      log.debug('Topic-source mapping function not available, returning empty');
       return [];
     }
     throw new APIError(`Failed to fetch topic-source mapping: ${error.message}`, 500, error.code);

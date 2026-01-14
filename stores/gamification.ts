@@ -4,6 +4,9 @@
 import { create } from 'zustand';
 import { supabase } from '@/lib/supabase';
 import { recordStoryReadForReview } from '@/lib/review';
+import { createLogger } from '@/lib/debug';
+
+const log = createLogger('Gamification');
 
 interface Achievement {
   id: string;
@@ -81,12 +84,12 @@ export const useGamificationStore = create<GamificationState>((set, get) => ({
       if (error) {
         // Handle missing table gracefully - use demo stats
         if (error.code === 'PGRST205' || error.message?.includes('schema cache')) {
-          console.log('Demo mode: Using local stats (database not configured)');
+          log.debug('Demo mode: Using local stats (database not configured)');
           set({ stats: { ...defaultStats, currentStreak: 1 }, isLoading: false });
           return;
         }
         if (error.code !== 'PGRST116') {
-          console.error('Stats fetch error:', error);
+          log.error('Stats fetch error:', error);
         }
       }
 
@@ -108,7 +111,7 @@ export const useGamificationStore = create<GamificationState>((set, get) => ({
         set({ stats: defaultStats, isLoading: false });
       }
     } catch (error) {
-      console.error('Stats fetch failed:', error);
+      log.error('Stats fetch failed:', error);
       set({ stats: defaultStats, isLoading: false });
     }
   },
@@ -134,7 +137,7 @@ export const useGamificationStore = create<GamificationState>((set, get) => ({
 
       // Handle missing table gracefully
       if (error && (error.code === 'PGRST205' || error.message?.includes('schema cache'))) {
-        console.log('Demo mode: Using local achievements (database not configured)');
+        log.debug('Demo mode: Using local achievements (database not configured)');
         set({ achievements: demoAchievements, unlockedAchievements: [] });
         return;
       }
@@ -169,7 +172,7 @@ export const useGamificationStore = create<GamificationState>((set, get) => ({
         unlockedAchievements: unlocked,
       });
     } catch (error) {
-      console.error('Achievements fetch failed:', error);
+      log.error('Achievements fetch failed:', error);
       set({ achievements: demoAchievements, unlockedAchievements: [] });
     }
   },
@@ -178,7 +181,7 @@ export const useGamificationStore = create<GamificationState>((set, get) => ({
     const newAchievements: Achievement[] = [];
 
     // Track for review prompt (runs regardless of auth)
-    recordStoryReadForReview().catch(console.error);
+    recordStoryReadForReview().catch(log.error);
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -217,7 +220,7 @@ export const useGamificationStore = create<GamificationState>((set, get) => ({
       // Refresh stats
       get().fetchStats();
     } catch (error) {
-      console.error('Record story read error:', error);
+      log.error('Record story read error:', error);
     }
 
     return newAchievements;
@@ -252,7 +255,7 @@ export const useGamificationStore = create<GamificationState>((set, get) => ({
 
       get().fetchStats();
     } catch (error) {
-      console.error('Record save error:', error);
+      log.error('Record save error:', error);
     }
 
     return newAchievements;
@@ -287,7 +290,7 @@ export const useGamificationStore = create<GamificationState>((set, get) => ({
 
       get().fetchStats();
     } catch (error) {
-      console.error('Record share error:', error);
+      log.error('Record share error:', error);
     }
 
     return newAchievements;

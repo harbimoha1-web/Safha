@@ -3,6 +3,9 @@ import { supabase } from '@/lib/supabase';
 import { useSubscriptionStore } from './subscription';
 import type { Profile } from '@/types';
 import type { Session, User } from '@supabase/supabase-js';
+import { createLogger } from '@/lib/debug';
+
+const log = createLogger('Auth');
 
 interface AuthState {
   session: Session | null;
@@ -195,7 +198,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       if (error) {
         // Profile doesn't exist - create it
         if (error.code === 'PGRST116' || error.message?.includes('coerce')) {
-          console.log('Profile not found, creating new profile...');
+          log.debug('Profile not found, creating new profile...');
           const newProfile = {
             id: user.id,
             username: user.email?.split('@')[0] || null,
@@ -213,7 +216,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             .single();
 
           if (createError) {
-            console.error('Failed to create profile:', createError.message);
+            log.error('Failed to create profile:', createError.message);
             // Use local fallback
             set({ profile: { ...newProfile, created_at: new Date().toISOString(), updated_at: new Date().toISOString() } as any });
           } else {
@@ -224,7 +227,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
         // Handle missing table gracefully - use mock profile
         if (error.code === 'PGRST205' || error.message?.includes('schema cache')) {
-          console.log('Demo mode: Using local profile (database not configured)');
+          log.debug('Demo mode: Using local profile (database not configured)');
           const mockProfile = {
             id: user.id,
             username: user.email?.split('@')[0] || 'user',
@@ -239,7 +242,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           set({ profile: mockProfile as any });
           return;
         }
-        console.error('Profile fetch error:', error.message);
+        log.error('Profile fetch error:', error.message);
         return;
       }
 
@@ -247,7 +250,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         set({ profile: data });
       }
     } catch (error) {
-      console.error('Profile fetch failed:', error);
+      log.error('Profile fetch failed:', error);
     }
   },
 

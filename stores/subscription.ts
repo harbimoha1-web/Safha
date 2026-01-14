@@ -11,6 +11,9 @@ import {
   createSubscriptionInvoice,
   type PlanType,
 } from '@/lib/payments/moyasar';
+import { createLogger } from '@/lib/debug';
+
+const log = createLogger('Subscription');
 
 // Intent TTL: 24 hours
 const INTENT_TTL_MS = 24 * 60 * 60 * 1000;
@@ -95,12 +98,12 @@ export const useSubscriptionStore = create<SubscriptionState>()(
       if (error) {
         // Handle missing table gracefully - use free plan
         if (error.code === 'PGRST205' || error.message?.includes('schema cache')) {
-          console.log('Demo mode: Using free plan (database not configured)');
+          log.debug('Demo mode: Using free plan (database not configured)');
           set({ subscription: null, isPremium: false, isLoading: false });
           return;
         }
         if (error.code !== 'PGRST116') {
-          console.error('Subscription fetch error:', error);
+          log.error('Subscription fetch error:', error);
         }
       }
 
@@ -124,7 +127,7 @@ export const useSubscriptionStore = create<SubscriptionState>()(
         set({ subscription: null, isPremium: false, isLoading: false });
       }
     } catch (error) {
-      console.error('Subscription fetch failed:', error);
+      log.error('Subscription fetch failed:', error);
       set({ subscription: null, isPremium: false, isLoading: false });
     }
   },
@@ -132,7 +135,7 @@ export const useSubscriptionStore = create<SubscriptionState>()(
   initiatePayment: async (plan: PlanType): Promise<PaymentResult> => {
     // In development without API key, use demo mode
     if (!IS_PRODUCTION && !MOYASAR_API_KEY) {
-      console.log('Demo mode: Simulating payment flow');
+      log.debug('Demo mode: Simulating payment flow');
       return {
         success: true,
         paymentUrl: undefined, // No URL means demo mode - will activate directly
@@ -166,7 +169,7 @@ export const useSubscriptionStore = create<SubscriptionState>()(
         paymentUrl: invoice.url,
       };
     } catch (error) {
-      console.error('Payment initiation error:', error);
+      log.error('Payment initiation error:', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Payment failed',
@@ -187,7 +190,7 @@ export const useSubscriptionStore = create<SubscriptionState>()(
   subscribe: async (plan: PlanType) => {
     // SECURITY: Block direct subscription in production
     if (IS_PRODUCTION) {
-      console.error('Direct subscription blocked in production - use payment flow');
+      log.error('Direct subscription blocked in production - use payment flow');
       throw new Error('Payment required');
     }
 
@@ -198,7 +201,7 @@ export const useSubscriptionStore = create<SubscriptionState>()(
         throw new Error('User not authenticated');
       }
 
-      console.log('Demo mode: Activating subscription directly (no payment)');
+      log.debug('Demo mode: Activating subscription directly (no payment)');
 
       // Calculate subscription period (30-day free trial)
       const now = new Date();
@@ -224,7 +227,7 @@ export const useSubscriptionStore = create<SubscriptionState>()(
         });
 
       if (error) {
-        console.error('Subscription update error:', error);
+        log.error('Subscription update error:', error);
         throw new Error('Failed to activate subscription');
       }
 
@@ -256,7 +259,7 @@ export const useSubscriptionStore = create<SubscriptionState>()(
         .eq('id', subscription.id);
 
       if (error) {
-        console.error('Cancel subscription error:', error);
+        log.error('Cancel subscription error:', error);
         return { success: false, error: 'Failed to cancel subscription' };
       }
 
@@ -270,7 +273,7 @@ export const useSubscriptionStore = create<SubscriptionState>()(
 
       return { success: true };
     } catch (error) {
-      console.error('Cancel subscription failed:', error);
+      log.error('Cancel subscription failed:', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error'
