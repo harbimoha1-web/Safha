@@ -4,10 +4,55 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.89.0';
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+// Allowed origins for CORS - restrict to app domains only
+const ALLOWED_ORIGINS = [
+  'https://safha.app',
+  'https://www.safha.app',
+  'https://qnibkvemxmhjgzydstlg.supabase.co', // Supabase project (for cron jobs)
+];
+
+function getCorsHeaders(origin: string | null): Record<string, string> {
+  // For cron jobs (no origin) or allowed origins, permit the request
+  const allowedOrigin = !origin || ALLOWED_ORIGINS.includes(origin)
+    ? (origin || ALLOWED_ORIGINS[0])
+    : '';
+
+  return {
+    'Access-Control-Allow-Origin': allowedOrigin,
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-function-secret',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  };
+}
+
+// Authentication: Verify request is from authorized source
+function verifyAuth(req: Request): { valid: boolean; error?: string } {
+  // Check for function secret (for cron jobs and internal calls)
+  const functionSecret = Deno.env.get('FUNCTION_SECRET');
+  const providedSecret = req.headers.get('x-function-secret');
+
+  if (functionSecret && providedSecret === functionSecret) {
+    return { valid: true };
+  }
+
+  // Check for valid Supabase service role key in authorization header
+  const authHeader = req.headers.get('authorization');
+  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+
+  if (authHeader && serviceRoleKey) {
+    const token = authHeader.replace('Bearer ', '');
+    if (token === serviceRoleKey) {
+      return { valid: true };
+    }
+  }
+
+  // Check if request is from Supabase cron (has specific user-agent)
+  const userAgent = req.headers.get('user-agent') || '';
+  if (userAgent.includes('Supabase') || userAgent.includes('pg_net')) {
+    return { valid: true };
+  }
+
+  return { valid: false, error: 'Unauthorized: Missing or invalid authentication' };
+}
 
 interface RawArticle {
   id: string;
@@ -27,6 +72,8 @@ interface RawArticle {
     language: string;
     name: string;
     reliability_score: number;
+    website_url: string | null;
+    logo_url: string | null;
   };
 }
 
@@ -123,14 +170,19 @@ ${content.slice(0, 3000)}`,
   }
   jsonText = jsonText.trim();
 
-  return JSON.parse(jsonText);
+  try {
+    return JSON.parse(jsonText);
+  } catch (parseError) {
+    const errorMsg = parseError instanceof Error ? parseError.message : 'Unknown parse error';
+    throw new Error(`Failed to parse Claude response as JSON: ${errorMsg}. Response preview: ${jsonText.slice(0, 200)}`);
+  }
 }
 
 async function processArticle(
   article: RawArticle,
   supabase: any,
   claudeApiKey: string
-): Promise<{ success: boolean; story_id?: string; error?: string; model_used?: string }> {
+): Promise<{ success: boolean; story_id?: string; error?: string; model_used?: string; skipped?: boolean }> {
   try {
     // Mark as processing
     await supabase
@@ -181,21 +233,47 @@ async function processArticle(
     }
 
     // Get or create source in sources table
+    // Use website_url from rss_source (correct) instead of article domain (wrong)
+    const websiteUrl = article.rss_source.website_url ||
+      article.original_url.split('/').slice(0, 3).join('/');
+
     let sourceId: string | null = null;
-    const { data: existingSource } = await supabase
+
+    // Try to find existing source by name OR url (more robust matching)
+    // Use separate queries to avoid SQL injection from string interpolation
+    let existingSource = null;
+
+    // First try to find by name
+    const { data: sourceByName } = await supabase
       .from('sources')
       .select('id')
       .eq('name', article.rss_source.name)
+      .limit(1)
       .single();
+
+    if (sourceByName) {
+      existingSource = sourceByName;
+    } else {
+      // If not found by name, try by URL
+      const { data: sourceByUrl } = await supabase
+        .from('sources')
+        .select('id')
+        .eq('url', websiteUrl)
+        .limit(1)
+        .single();
+      existingSource = sourceByUrl;
+    }
 
     if (existingSource) {
       sourceId = existingSource.id;
     } else {
+      // Create new source with correct website URL and logo from rss_source
       const { data: newSource } = await supabase
         .from('sources')
         .insert({
           name: article.rss_source.name,
-          url: article.original_url.split('/').slice(0, 3).join('/'),
+          url: websiteUrl,
+          logo_url: article.rss_source.logo_url,
           language: article.rss_source.language,
           reliability_score: article.rss_source.reliability_score,
         })
@@ -204,13 +282,55 @@ async function processArticle(
       sourceId = newSource?.id;
     }
 
-    // Map topic slugs to IDs
+    // Map topic slugs to IDs with validation and default fallback
     const { data: topicsData } = await supabase
       .from('topics')
       .select('id, slug')
       .in('slug', summary.topics);
 
-    const topicIds = topicsData?.map((t: { id: string }) => t.id) || [];
+    // Log missing topic slugs for debugging
+    const foundSlugs = topicsData?.map((t: { slug: string }) => t.slug) || [];
+    const missingSlugs = summary.topics.filter((s: string) => !foundSlugs.includes(s));
+    if (missingSlugs.length > 0) {
+      console.warn(`[${article.original_title?.slice(0, 30)}] Unknown topic slugs: ${missingSlugs.join(', ')}`);
+    }
+
+    let topicIds = topicsData?.map((t: { id: string }) => t.id) || [];
+
+    // If no topics found, assign default 'general' topic so stories are discoverable
+    if (topicIds.length === 0) {
+      const { data: defaultTopic } = await supabase
+        .from('topics')
+        .select('id')
+        .eq('slug', 'general')
+        .single();
+      if (defaultTopic) {
+        topicIds = [defaultTopic.id];
+        console.log(`[${article.original_title?.slice(0, 30)}] Assigned default 'general' topic`);
+      }
+    }
+
+    // Check if story already exists (prevent duplicates)
+    const { data: existingStory } = await supabase
+      .from('stories')
+      .select('id')
+      .eq('source_id', sourceId)
+      .eq('original_url', article.original_url)
+      .single();
+
+    if (existingStory) {
+      // Story already exists - mark raw_article as processed and skip
+      console.log(`[${article.original_title?.slice(0, 30)}] Story already exists, skipping`);
+      await supabase
+        .from('raw_articles')
+        .update({
+          status: 'processed',
+          story_id: existingStory.id,
+          processed_at: new Date().toISOString(),
+        })
+        .eq('id', article.id);
+      return { success: true, story_id: existingStory.id, skipped: true };
+    }
 
     // Create story
     const { data: story, error: storyError } = await supabase
@@ -219,6 +339,7 @@ async function processArticle(
         source_id: sourceId,
         original_url: article.original_url,
         original_title: article.original_title,
+        original_description: article.original_description,  // RSS description as fallback
         title_ar: article.rss_source.language === 'ar' ? article.original_title : null,
         title_en: article.rss_source.language === 'en' ? article.original_title : null,
         summary_ar: summary.summary_ar,
@@ -232,7 +353,8 @@ async function processArticle(
         video_url: article.video_url,
         video_type: article.video_type,
         topic_ids: topicIds,
-        published_at: article.published_at,
+        // Default to fetched_at or NOW() if published_at is NULL (ensures proper feed sorting)
+        published_at: article.published_at || article.fetched_at || new Date().toISOString(),
         is_approved: true, // Auto-approved, admin can remove if needed
       })
       .select('id')
@@ -271,8 +393,21 @@ async function processArticle(
 }
 
 serve(async (req) => {
+  const origin = req.headers.get('origin');
+  const corsHeaders = getCorsHeaders(origin);
+
+  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
+  }
+
+  // Verify authentication
+  const auth = verifyAuth(req);
+  if (!auth.valid) {
+    return new Response(
+      JSON.stringify({ error: auth.error }),
+      { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
   }
 
   try {
@@ -291,7 +426,8 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // Parse optional limit from request
-    let limit = 10;
+    // Increased default from 10 to 25 for faster backlog processing
+    let limit = 25;
     try {
       const body = await req.json();
       if (body.limit) limit = Math.min(body.limit, 50);
@@ -304,7 +440,7 @@ serve(async (req) => {
       .from('raw_articles')
       .select(`
         *,
-        rss_source:rss_sources(language, name, reliability_score)
+        rss_source:rss_sources(language, name, reliability_score, website_url, logo_url)
       `)
       .eq('status', 'pending')
       .lt('retry_count', 3)
@@ -340,6 +476,7 @@ serve(async (req) => {
       total_processed: results.length,
       successful: results.filter(r => r.success).length,
       failed: results.filter(r => !r.success).length,
+      skipped_duplicates: results.filter(r => r.skipped).length,
       models: {
         premium: results.filter(r => r.model_used === MODELS.premium).length,
         standard: results.filter(r => r.model_used === MODELS.standard).length,

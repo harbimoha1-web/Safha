@@ -111,12 +111,12 @@ export default function TabLayout() {
           }}
         />
 
-        {/* Tab 2: Explore (Search) */}
+        {/* Tab 2: Preferences (Search/Sources) */}
         <Tabs.Screen
           name="search"
           options={{
-            title: isArabic ? 'استكشف' : 'Explore',
-            tabBarIcon: ({ color }) => <TabBarIcon name="compass" color={color} />,
+            title: isArabic ? 'التفضيلات' : 'Preferences',
+            tabBarIcon: ({ color }) => <TabBarIcon name="sliders" color={color} />,
           }}
         />
 

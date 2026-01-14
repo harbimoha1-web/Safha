@@ -99,6 +99,11 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 
+import {
+  Tajawal_400Regular,
+  Tajawal_500Medium,
+  Tajawal_700Bold,
+} from '@expo-google-fonts/tajawal';
 import { useAuthStore, useAppStore } from '@/stores';
 import { useSubscriptionStore } from '@/stores/subscription';
 import { supabase } from '@/lib/supabase';
@@ -205,9 +210,9 @@ function useProtectedRoute(onError: (error: string) => void, onReady: () => void
 export default function RootLayout() {
   const [loaded, error] = useFonts({
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
-    'Tajawal-Regular': require('../assets/fonts/Tajawal-Regular.ttf'),
-    'Tajawal-Medium': require('../assets/fonts/Tajawal-Medium.ttf'),
-    'Tajawal-Bold': require('../assets/fonts/Tajawal-Bold.ttf'),
+    'Tajawal-Regular': Tajawal_400Regular,
+    'Tajawal-Medium': Tajawal_500Medium,
+    'Tajawal-Bold': Tajawal_700Bold,
     ...FontAwesome.font,
   });
 
@@ -348,7 +353,6 @@ function ThemedApp() {
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-          <Stack.Screen name="admin" options={{ headerShown: false }} />
           <Stack.Screen
             name="story/[id]"
             options={{

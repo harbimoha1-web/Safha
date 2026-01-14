@@ -117,21 +117,24 @@ export function HistoryItemSkeleton() {
   );
 }
 
-export function TopicCardSkeleton() {
+// Chip-style skeleton for topic selection
+export function TopicChipSkeleton({ width = 120 }: { width?: number }) {
   const { colors } = useTheme();
   return (
-    <View style={[styles.topicCard, { backgroundColor: colors.surface }]}>
-      <Skeleton width={32} height={32} borderRadius={16} />
-      <Skeleton width={70} height={14} style={{ marginTop: 8 }} />
+    <View style={[styles.topicChip, { backgroundColor: colors.surface, width }]}>
+      <Skeleton width={18} height={18} borderRadius={9} />
+      <Skeleton width={width - 50} height={16} borderRadius={4} />
     </View>
   );
 }
 
-export function TopicGridSkeleton({ count = 8 }: { count?: number }) {
+export function TopicGridSkeleton({ count = 12 }: { count?: number }) {
+  // Variable widths for natural look
+  const chipWidths = [110, 130, 100, 140, 120, 90, 150, 115, 135, 105, 125, 145];
   return (
-    <View style={styles.topicGrid}>
+    <View style={styles.topicChipsGrid}>
       {Array.from({ length: count }).map((_, i) => (
-        <TopicCardSkeleton key={i} />
+        <TopicChipSkeleton key={i} width={chipWidths[i % chipWidths.length]} />
       ))}
     </View>
   );
@@ -201,14 +204,15 @@ const styles = StyleSheet.create({
     padding: 12,
     justifyContent: 'center',
   },
-  topicCard: {
-    width: '47%',
-    aspectRatio: 1.5,
-    borderRadius: 16,
-    justifyContent: 'center',
+  topicChip: {
+    flexDirection: 'row',
     alignItems: 'center',
+    height: 48,
+    borderRadius: 24,
+    paddingHorizontal: 16,
+    gap: 8,
   },
-  topicGrid: {
+  topicChipsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     paddingHorizontal: 16,

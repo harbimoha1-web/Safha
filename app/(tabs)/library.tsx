@@ -8,7 +8,6 @@ import {
   StyleSheet,
   FlatList,
   TouchableOpacity,
-  Image,
   RefreshControl,
   Modal,
   TextInput,
@@ -17,6 +16,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { HistoryItemSkeleton } from '@/components/SkeletonLoader';
+import { OptimizedImage } from '@/components/OptimizedImage';
 import { FontAwesome } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useAppStore, useAuthStore, useSubscriptionStore } from '@/stores';
@@ -96,7 +96,7 @@ export default function LibraryScreen() {
 
     setSelectedStory({
       id: story.story.id,
-      title: (isArabic ? story.story.title_ar : story.story.title_en) || 'Untitled',
+      title: (isArabic ? story.story.title_ar : story.story.title_en) || story.story.original_title || 'Untitled',
     });
     setCurrentNote(existingNote?.content || '');
     setExistingNoteId(existingNote?.id || null);
@@ -148,13 +148,17 @@ export default function LibraryScreen() {
         onPress={() => handleStoryPress(item.story!.id)}
         accessibilityRole="button"
       >
-        <Image
-          source={{ uri: item.story.image_url || 'https://via.placeholder.com/100' }}
+        <OptimizedImage
+          url={item.story.image_url}
           style={styles.storyImage}
+          width={100}
+          height={100}
+          resizeMode="cover"
+          fallbackIcon="bookmark"
         />
         <View style={styles.storyContent}>
           <Text style={[styles.storyTitle, { color: colors.textPrimary }, isArabic && styles.arabicText]} numberOfLines={2}>
-            {isArabic ? item.story.title_ar : item.story.title_en}
+            {(isArabic ? item.story.title_ar : item.story.title_en) || item.story.original_title}
           </Text>
           <Text style={[styles.storyMeta, { color: colors.textMuted }]}>
             {new Date(item.created_at).toLocaleDateString(isArabic ? 'ar-SA' : 'en-US', {
@@ -198,12 +202,17 @@ export default function LibraryScreen() {
         onPress={() => handleStoryPress(item.id)}
         accessibilityRole="button"
       >
-        {item.image_url && (
-          <Image source={{ uri: item.image_url }} style={styles.storyImage} />
-        )}
+        <OptimizedImage
+          url={item.image_url}
+          style={styles.storyImage}
+          width={100}
+          height={100}
+          resizeMode="cover"
+          fallbackIcon="newspaper-o"
+        />
         <View style={styles.storyContent}>
           <Text style={[styles.storyTitle, { color: colors.textPrimary }, isArabic && styles.arabicText]} numberOfLines={2}>
-            {isArabic ? item.title_ar : item.title_en}
+            {(isArabic ? item.title_ar : item.title_en) || item.original_title}
           </Text>
           <View style={styles.metaRow}>
             {item.source && <Text style={[styles.sourceText, { color: colors.primary }]}>{item.source.name}</Text>}

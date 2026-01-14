@@ -1,13 +1,13 @@
-import { useCallback, useState, useRef } from 'react';
+import { useCallback, useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   FlatList,
   TouchableOpacity,
-  Image,
   RefreshControl,
 } from 'react-native';
+import { OptimizedImage } from '@/components/OptimizedImage';
 import { HistoryItemSkeleton } from '@/components/SkeletonLoader';
 import { SwipeableRow } from '@/components/SwipeableRow';
 import { FontAwesome } from '@expo/vector-icons';
@@ -83,6 +83,15 @@ export default function SavedScreen() {
     }
   }, [deletedItem, saveStoryMutation, isArabic, showToast]);
 
+  // Cleanup undo timeout on unmount to prevent state updates on unmounted component
+  useEffect(() => {
+    return () => {
+      if (undoTimeoutRef.current) {
+        clearTimeout(undoTimeoutRef.current);
+      }
+    };
+  }, []);
+
   const renderItem = ({ item }: { item: SavedStory }) => {
     if (!item.story) return null;
 
@@ -96,19 +105,23 @@ export default function SavedScreen() {
           onPress={() => handleStoryPress(item.story!.id)}
           activeOpacity={0.9}
           accessibilityRole="button"
-          accessibilityLabel={(isArabic ? item.story!.title_ar : item.story!.title_en) || undefined}
+          accessibilityLabel={(isArabic ? item.story!.title_ar : item.story!.title_en) || item.story!.original_title || undefined}
           accessibilityHint={isArabic ? 'اسحب يساراً للإزالة' : 'Swipe left to remove'}
         >
-          <Image
-            source={{ uri: item.story.image_url || 'https://via.placeholder.com/100' }}
+          <OptimizedImage
+            url={item.story.image_url}
             style={styles.storyImage}
+            width={100}
+            height={100}
+            resizeMode="cover"
+            fallbackIcon="bookmark"
           />
           <View style={styles.storyContent}>
             <Text
               style={[styles.storyTitle, isArabic && styles.arabicText]}
               numberOfLines={2}
             >
-              {isArabic ? item.story.title_ar : item.story.title_en}
+              {(isArabic ? item.story.title_ar : item.story.title_en) || item.story.original_title}
             </Text>
             <Text style={styles.storyMeta}>
               {new Date(item.created_at).toLocaleDateString()}

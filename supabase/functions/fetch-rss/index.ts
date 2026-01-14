@@ -7,10 +7,20 @@ import { parseFeed } from 'https://deno.land/x/rss@1.0.0/mod.ts';
 import { DOMParser, Element } from 'https://deno.land/x/deno_dom@v0.1.43/deno-dom-wasm.ts';
 import { Readability } from 'https://esm.sh/@mozilla/readability@0.5.0';
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+const ALLOWED_ORIGINS = [
+  'https://safha.app',
+  'https://www.safha.app',
+  'https://qnibkvemxmhjgzydstlg.supabase.co',
+];
+
+function getCorsHeaders(req: Request): Record<string, string> {
+  const origin = req.headers.get('origin') || '';
+  const allowedOrigin = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+  return {
+    'Access-Control-Allow-Origin': allowedOrigin,
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  };
+}
 
 interface RSSSource {
   id: string;
@@ -114,7 +124,7 @@ function extractImageUrl(item: any): string | null {
   return null;
 }
 
-// Result from webpage scraping (image + full content)
+// Result from webpage scraping (image + full content + video)
 interface WebpageData {
   imageUrl: string | null;
   fullContent: string | null;
@@ -124,6 +134,9 @@ interface WebpageData {
   excerpt?: string | null;
   byline?: string | null;
   siteName?: string | null;
+  // Video extracted from HTML
+  videoUrl: string | null;
+  videoType: 'mp4' | 'youtube' | 'vimeo' | 'dailymotion' | null;
 }
 
 // Content quality indicators
@@ -178,13 +191,15 @@ function isBoilerplate(text: string): boolean {
   return BOILERPLATE_PATTERNS.some(pattern => pattern.test(lowerText));
 }
 
-// Fetch webpage and extract both og:image and full article content
+// Fetch webpage and extract og:image, video, and full article content
 async function fetchWebpageData(url: string): Promise<WebpageData> {
   const result: WebpageData = {
     imageUrl: null,
     fullContent: null,
     contentQuality: 0,
-    extractionMethod: 'failed'
+    extractionMethod: 'failed',
+    videoUrl: null,
+    videoType: null,
   };
 
   try {
@@ -221,6 +236,13 @@ async function fetchWebpageData(url: string): Promise<WebpageData> {
 
     // ========== EXTRACT IMAGE (using DOM) ==========
     result.imageUrl = extractImageFromDOM(doc, url);
+
+    // ========== EXTRACT VIDEO (from HTML) ==========
+    const videoInfo = extractVideoFromHtml(doc, url);
+    if (videoInfo) {
+      result.videoUrl = videoInfo.url;
+      result.videoType = videoInfo.type;
+    }
 
     // ========== EXTRACT CONTENT ==========
     // Strategy 1: Mozilla Readability (what Firefox Reader Mode & Pocket use)
@@ -360,6 +382,184 @@ function extractImageFromDOM(doc: Document, baseUrl: string): string | null {
   }
 
   return null;
+}
+
+// Extract video URL from HTML page
+function extractVideoFromHtml(doc: Document, baseUrl: string): { url: string; type: 'mp4' | 'youtube' | 'vimeo' | 'dailymotion' } | null {
+  // 1. Check og:video meta tag
+  const ogVideo = doc.querySelector('meta[property="og:video"]') ||
+                  doc.querySelector('meta[property="og:video:url"]') ||
+                  doc.querySelector('meta[property="og:video:secure_url"]');
+  if (ogVideo) {
+    const videoUrl = ogVideo.getAttribute('content');
+    if (videoUrl) {
+      const videoType = detectVideoType(videoUrl);
+      if (videoType) {
+        console.log(`[extractVideoFromHtml] Found og:video: ${videoUrl}`);
+        return { url: normalizeVideoUrl(videoUrl, videoType), type: videoType };
+      }
+    }
+  }
+
+  // 2. Check twitter:player meta tag
+  const twitterPlayer = doc.querySelector('meta[name="twitter:player"]');
+  if (twitterPlayer) {
+    const playerUrl = twitterPlayer.getAttribute('content');
+    if (playerUrl) {
+      const videoType = detectVideoType(playerUrl);
+      if (videoType) {
+        console.log(`[extractVideoFromHtml] Found twitter:player: ${playerUrl}`);
+        return { url: normalizeVideoUrl(playerUrl, videoType), type: videoType };
+      }
+    }
+  }
+
+  // 3. Check for HTML5 <video> tags
+  const videoElements = doc.querySelectorAll('video');
+  for (const video of videoElements) {
+    // Check video src attribute
+    const videoSrc = video.getAttribute('src');
+    if (videoSrc && isVideoFile(videoSrc)) {
+      const resolvedUrl = resolveImageUrl(videoSrc, baseUrl);
+      if (resolvedUrl) {
+        console.log(`[extractVideoFromHtml] Found <video src>: ${resolvedUrl}`);
+        return { url: resolvedUrl, type: 'mp4' };
+      }
+    }
+
+    // Check <source> children
+    const sources = video.querySelectorAll('source');
+    for (const source of sources) {
+      const sourceSrc = source.getAttribute('src');
+      const sourceType = source.getAttribute('type');
+      if (sourceSrc && (isVideoFile(sourceSrc) || sourceType?.startsWith('video/'))) {
+        const resolvedUrl = resolveImageUrl(sourceSrc, baseUrl);
+        if (resolvedUrl) {
+          console.log(`[extractVideoFromHtml] Found <video><source>: ${resolvedUrl}`);
+          return { url: resolvedUrl, type: 'mp4' };
+        }
+      }
+    }
+  }
+
+  // 4. Check for iframe embeds (YouTube, Vimeo, Dailymotion)
+  const iframes = doc.querySelectorAll('iframe');
+  for (const iframe of iframes) {
+    const iframeSrc = iframe.getAttribute('src') || iframe.getAttribute('data-src');
+    if (iframeSrc) {
+      const videoType = detectVideoType(iframeSrc);
+      if (videoType) {
+        console.log(`[extractVideoFromHtml] Found <iframe>: ${iframeSrc}`);
+        return { url: normalizeVideoUrl(iframeSrc, videoType), type: videoType };
+      }
+    }
+  }
+
+  // 5. Check for embedded video links in article body
+  const articleBody = doc.querySelector('article, main, .article-content, .post-content');
+  if (articleBody) {
+    const htmlContent = articleBody.innerHTML || '';
+
+    // YouTube patterns
+    const ytEmbedMatch = htmlContent.match(/youtube\.com\/embed\/([a-zA-Z0-9_-]{11})/);
+    if (ytEmbedMatch) {
+      console.log(`[extractVideoFromHtml] Found YouTube embed in body: ${ytEmbedMatch[1]}`);
+      return { url: `https://www.youtube.com/watch?v=${ytEmbedMatch[1]}`, type: 'youtube' };
+    }
+
+    const ytWatchMatch = htmlContent.match(/youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})/);
+    if (ytWatchMatch) {
+      console.log(`[extractVideoFromHtml] Found YouTube watch in body: ${ytWatchMatch[1]}`);
+      return { url: `https://www.youtube.com/watch?v=${ytWatchMatch[1]}`, type: 'youtube' };
+    }
+
+    const ytShortMatch = htmlContent.match(/youtu\.be\/([a-zA-Z0-9_-]{11})/);
+    if (ytShortMatch) {
+      console.log(`[extractVideoFromHtml] Found YouTube short in body: ${ytShortMatch[1]}`);
+      return { url: `https://www.youtube.com/watch?v=${ytShortMatch[1]}`, type: 'youtube' };
+    }
+
+    // Vimeo patterns
+    const vimeoMatch = htmlContent.match(/(?:player\.)?vimeo\.com\/(?:video\/)?(\d+)/);
+    if (vimeoMatch) {
+      console.log(`[extractVideoFromHtml] Found Vimeo in body: ${vimeoMatch[1]}`);
+      return { url: `https://vimeo.com/${vimeoMatch[1]}`, type: 'vimeo' };
+    }
+
+    // Dailymotion patterns
+    const dailymotionMatch = htmlContent.match(/dailymotion\.com\/(?:video|embed\/video)\/([a-zA-Z0-9]+)/);
+    if (dailymotionMatch) {
+      console.log(`[extractVideoFromHtml] Found Dailymotion in body: ${dailymotionMatch[1]}`);
+      return { url: `https://www.dailymotion.com/video/${dailymotionMatch[1]}`, type: 'dailymotion' };
+    }
+  }
+
+  return null;
+}
+
+// Detect video type from URL
+function detectVideoType(url: string): 'mp4' | 'youtube' | 'vimeo' | 'dailymotion' | null {
+  const lowerUrl = url.toLowerCase();
+
+  if (lowerUrl.includes('youtube.com') || lowerUrl.includes('youtu.be')) {
+    return 'youtube';
+  }
+  if (lowerUrl.includes('vimeo.com')) {
+    return 'vimeo';
+  }
+  if (lowerUrl.includes('dailymotion.com')) {
+    return 'dailymotion';
+  }
+  if (isVideoFile(url)) {
+    return 'mp4';
+  }
+
+  return null;
+}
+
+// Check if URL is a video file
+function isVideoFile(url: string): boolean {
+  const lowerUrl = url.toLowerCase();
+  return lowerUrl.endsWith('.mp4') ||
+         lowerUrl.endsWith('.webm') ||
+         lowerUrl.endsWith('.m4v') ||
+         lowerUrl.endsWith('.mov') ||
+         lowerUrl.includes('/video/') ||
+         lowerUrl.includes('video.') ||
+         /\.mp4\?/.test(lowerUrl);
+}
+
+// Normalize video URL to standard watch/view format
+function normalizeVideoUrl(url: string, type: 'mp4' | 'youtube' | 'vimeo' | 'dailymotion'): string {
+  if (type === 'youtube') {
+    // Extract video ID and convert to standard watch URL
+    const embedMatch = url.match(/youtube\.com\/embed\/([a-zA-Z0-9_-]{11})/);
+    if (embedMatch) {
+      return `https://www.youtube.com/watch?v=${embedMatch[1]}`;
+    }
+    const shortMatch = url.match(/youtu\.be\/([a-zA-Z0-9_-]{11})/);
+    if (shortMatch) {
+      return `https://www.youtube.com/watch?v=${shortMatch[1]}`;
+    }
+  }
+
+  if (type === 'vimeo') {
+    // Extract video ID and convert to standard URL
+    const vimeoMatch = url.match(/(?:player\.)?vimeo\.com\/(?:video\/)?(\d+)/);
+    if (vimeoMatch) {
+      return `https://vimeo.com/${vimeoMatch[1]}`;
+    }
+  }
+
+  if (type === 'dailymotion') {
+    // Extract video ID and convert to standard URL
+    const dmMatch = url.match(/dailymotion\.com\/(?:video|embed\/video)\/([a-zA-Z0-9]+)/);
+    if (dmMatch) {
+      return `https://www.dailymotion.com/video/${dmMatch[1]}`;
+    }
+  }
+
+  return url;
 }
 
 // Extract article text from JSON-LD structured data
@@ -675,9 +875,11 @@ async function fetchRSSSource(
         imageUrl = resolveImageUrl(imageUrl, url);
       }
 
-      // Fetch webpage data (image fallback + full article content)
+      // Fetch webpage data (image fallback + full article content + video)
       let fullContent: string | null = null;
       let contentQuality = 0;
+      let webpageVideoUrl: string | null = null;
+      let webpageVideoType: string | null = null;
       if (url) {
         const webpageData = await fetchWebpageData(url);
         // Use webpage image if RSS didn't provide one
@@ -687,6 +889,9 @@ async function fetchRSSSource(
         // Store full article content and quality score
         fullContent = webpageData.fullContent;
         contentQuality = webpageData.contentQuality;
+        // Store video extracted from webpage
+        webpageVideoUrl = webpageData.videoUrl;
+        webpageVideoType = webpageData.videoType;
       }
 
       // Final validation: ensure URL is absolute, discard invalid URLs
@@ -694,17 +899,30 @@ async function fetchRSSSource(
         imageUrl = null;
       }
 
+      // Prefer webpage video over RSS video (webpage is more reliable)
+      const finalVideoUrl = webpageVideoUrl || videoInfo?.url || null;
+      const finalVideoType = webpageVideoType || videoInfo?.type || null;
+
       // Generate content hash for deduplication
       const contentHash = await generateContentHash(title + stripHtml(content));
 
-      // Check for duplicates by URL or content hash
-      const { data: existing } = await supabase
+      // Check for duplicates by URL (parameterized query - safe from injection)
+      const { data: existingByUrl } = await supabase
         .from('raw_articles')
         .select('id')
-        .or(`original_url.eq.${url},content_hash.eq.${contentHash}`)
+        .eq('original_url', url)
         .limit(1);
 
-      if (existing && existing.length > 0) continue;
+      if (existingByUrl && existingByUrl.length > 0) continue;
+
+      // Check for duplicates by content hash (parameterized query - safe from injection)
+      const { data: existingByHash } = await supabase
+        .from('raw_articles')
+        .select('id')
+        .eq('content_hash', contentHash)
+        .limit(1);
+
+      if (existingByHash && existingByHash.length > 0) continue;
 
       // Insert new article
       const { error: insertError } = await supabase
@@ -720,8 +938,8 @@ async function fetchRSSSource(
           content_quality: contentQuality,
           author,
           image_url: imageUrl,
-          video_url: videoInfo?.url || null,
-          video_type: videoInfo?.type || null,
+          video_url: finalVideoUrl,
+          video_type: finalVideoType,
           published_at: publishedAt,
           content_hash: contentHash,
           status: 'pending',
@@ -760,6 +978,8 @@ async function fetchRSSSource(
 }
 
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
+
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
@@ -783,13 +1003,14 @@ serve(async (req) => {
       // No body or invalid JSON, use default
     }
 
-    // Get sources that need fetching
+    // Get sources that need fetching (30 minutes stale threshold)
+    const staleThreshold = new Date(Date.now() - 30 * 60 * 1000).toISOString();
     const { data: sources, error: sourcesError } = await supabase
       .from('rss_sources')
       .select('*')
       .eq('is_active', true)
       .lt('error_count', 5) // Skip sources with too many errors
-      .or(`last_fetched_at.is.null,last_fetched_at.lt.${new Date(Date.now() - 30 * 60 * 1000).toISOString()}`)
+      .or(`last_fetched_at.is.null,last_fetched_at.lt.${staleThreshold}`)
       .order('last_fetched_at', { ascending: true, nullsFirst: true })
       .limit(sourceLimit);
 

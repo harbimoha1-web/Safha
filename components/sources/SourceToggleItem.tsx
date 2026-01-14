@@ -2,6 +2,7 @@ import { View, TouchableOpacity, Text, Image, Switch, StyleSheet } from 'react-n
 import { FontAwesome } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
 import { spacing, fontSize, fontWeight, borderRadius } from '@/constants/theme';
+import { getSourceLogo } from '@/lib/image';
 import type { Source } from '@/types';
 
 interface SourceToggleItemProps {
@@ -14,6 +15,9 @@ interface SourceToggleItemProps {
 export function SourceToggleItem({ source, isSelected, onToggle, isArabic }: SourceToggleItemProps) {
   const { colors } = useTheme();
 
+  // Get logo URL: manual override -> Google Favicons auto-fetch -> null
+  const logoUrl = getSourceLogo(source.url, source.logo_url);
+
   return (
     <TouchableOpacity
       style={[styles.container, { backgroundColor: colors.surface }]}
@@ -22,8 +26,8 @@ export function SourceToggleItem({ source, isSelected, onToggle, isArabic }: Sou
       accessibilityState={{ checked: isSelected }}
       accessibilityLabel={source.name}
     >
-      {source.logo_url ? (
-        <Image source={{ uri: source.logo_url }} style={styles.logo} />
+      {logoUrl ? (
+        <Image source={{ uri: logoUrl }} style={styles.logo} />
       ) : (
         <View style={[styles.logoPlaceholder, { backgroundColor: colors.surfaceLight }]}>
           <FontAwesome name="newspaper-o" size={18} color={colors.textMuted} />

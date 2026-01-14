@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, memo } from 'react';
 import { View, TouchableOpacity, Text, StyleSheet, LayoutAnimation, Platform, UIManager } from 'react-native';
 import { FontAwesome } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -8,10 +8,12 @@ import { SourceToggleItem } from './SourceToggleItem';
 import { LanguageFilterBar } from './LanguageFilterBar';
 import type { Topic, Source, LanguageFilter } from '@/types';
 
-// Enable LayoutAnimation on Android
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
+// Enable LayoutAnimation on Android - DISABLED due to lag issues
+// LayoutAnimation on Android is known to cause jank with complex layouts
+// Only enable on iOS where it performs smoothly
+// if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+//   UIManager.setLayoutAnimationEnabledExperimental(true);
+// }
 
 interface TopicAccordionProps {
   topic: Topic;
@@ -26,7 +28,8 @@ interface TopicAccordionProps {
   isArabic: boolean;
 }
 
-export function TopicAccordion({
+// Memoized to prevent unnecessary re-renders when parent state changes
+export const TopicAccordion = memo(function TopicAccordion({
   topic,
   sources,
   isExpanded,
@@ -60,7 +63,10 @@ export function TopicAccordion({
   const topicColor = topic.color || getTopicColor(topic.slug);
 
   const handleToggle = () => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    // Only use LayoutAnimation on iOS - Android has performance issues
+    if (Platform.OS === 'ios') {
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    }
     onToggleExpand();
   };
 
@@ -69,11 +75,8 @@ export function TopicAccordion({
     onSelectAll(sourceIds);
   };
 
-  // Show topic even if no sources for current language filter
-  // (sources will appear when user changes filter)
-  if (sources.length === 0) {
-    return null; // Only hide if topic has no sources at all
-  }
+  // Always show topic - even if no sources yet
+  // This ensures all user interests appear in Manage Sources
 
   return (
     <View style={styles.container}>
@@ -106,52 +109,73 @@ export function TopicAccordion({
       {/* Expanded Content */}
       {isExpanded && (
         <View style={styles.content}>
-          {/* Language Filter */}
-          <LanguageFilterBar
-            value={languageFilter}
-            onChange={onLanguageFilterChange}
-            isArabic={isArabic}
-          />
+          {sources.length === 0 ? (
+            /* Empty state when no sources */
+            <View style={styles.emptyState}>
+              <FontAwesome name="inbox" size={32} color={colors.textMuted} />
+              <Text style={[styles.emptyStateText, { color: colors.textSecondary }]}>
+                {isArabic ? 'لا توجد مصادر متاحة حالياً' : 'No sources available yet'}
+              </Text>
+            </View>
+          ) : (
+            <>
+              {/* Language Filter */}
+              <LanguageFilterBar
+                value={languageFilter}
+                onChange={onLanguageFilterChange}
+                isArabic={isArabic}
+              />
 
-          {/* Select/Deselect All Toggle */}
-          <TouchableOpacity
-            style={[styles.selectAllButton, { borderColor: colors.border }]}
-            onPress={handleSelectAll}
-            accessibilityRole="button"
-            accessibilityLabel={
-              allSelected
-                ? (isArabic ? 'إلغاء تحديد الكل' : 'Deselect All')
-                : (isArabic ? 'تحديد الكل' : 'Select All')
-            }
-          >
-            <FontAwesome
-              name={allSelected ? 'square-o' : 'check-square-o'}
-              size={16}
-              color={colors.primary}
-            />
-            <Text style={[styles.selectAllText, { color: colors.primary }]}>
-              {allSelected
-                ? (isArabic ? 'إلغاء تحديد الكل' : 'Deselect All')
-                : (isArabic ? 'تحديد الكل' : 'Select All')
-              }
-            </Text>
-          </TouchableOpacity>
+              {/* Select/Deselect All Toggle */}
+              <TouchableOpacity
+                style={[
+                  styles.selectAllButton,
+                  {
+                    backgroundColor: allSelected ? `${colors.primary}15` : colors.surface,
+                    borderColor: allSelected ? colors.primary : colors.border,
+                  }
+                ]}
+                onPress={handleSelectAll}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  allSelected
+                    ? (isArabic ? 'إلغاء تحديد الكل' : 'Deselect All')
+                    : (isArabic ? 'تحديد الكل' : 'Select All')
+                }
+              >
+                <FontAwesome
+                  name={allSelected ? 'check-square' : 'square-o'}
+                  size={18}
+                  color={allSelected ? colors.primary : colors.textMuted}
+                />
+                <Text style={[
+                  styles.selectAllText,
+                  { color: allSelected ? colors.primary : colors.textSecondary }
+                ]}>
+                  {allSelected
+                    ? (isArabic ? 'إلغاء تحديد الكل' : 'Deselect All')
+                    : (isArabic ? 'تحديد الكل' : 'Select All')
+                  }
+                </Text>
+              </TouchableOpacity>
 
-          {/* Sources List */}
-          {filteredSources.map((source) => (
-            <SourceToggleItem
-              key={source.id}
-              source={source}
-              isSelected={!deselectedSources.includes(source.id)}
-              onToggle={() => onToggleSource(source.id)}
-              isArabic={isArabic}
-            />
-          ))}
+              {/* Sources List */}
+              {filteredSources.map((source) => (
+                <SourceToggleItem
+                  key={source.id}
+                  source={source}
+                  isSelected={!deselectedSources.includes(source.id)}
+                  onToggle={() => onToggleSource(source.id)}
+                  isArabic={isArabic}
+                />
+              ))}
+            </>
+          )}
         </View>
       )}
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: {
@@ -190,16 +214,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
     marginBottom: spacing.md,
     borderWidth: 1,
-    borderRadius: borderRadius.sm,
-    borderStyle: 'dashed',
-    alignSelf: 'flex-start',
+    borderRadius: borderRadius.md,
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.xl,
+    gap: spacing.md,
+  },
+  emptyStateText: {
+    fontSize: fontSize.sm,
+    textAlign: 'center',
   },
   selectAllText: {
-    fontSize: fontSize.sm,
+    fontSize: fontSize.md,
     fontWeight: fontWeight.medium,
   },
 });

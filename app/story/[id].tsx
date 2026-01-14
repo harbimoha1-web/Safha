@@ -29,6 +29,8 @@ export default function StoryDetailScreen() {
   const [showFullSummary, setShowFullSummary] = useState(false);
   const [isLoadingContent, setIsLoadingContent] = useState(false);
   const [fetchedContent, setFetchedContent] = useState<string | null>(null);
+  const [contentFetchFailed, setContentFetchFailed] = useState(false);
+  const [contentFetchAttempts, setContentFetchAttempts] = useState(0);
   const [imageError, setImageError] = useState(false);
   const [useOriginalUrl, setUseOriginalUrl] = useState(false);
   const { settings } = useAppStore();
@@ -63,30 +65,51 @@ export default function StoryDetailScreen() {
   };
 
   // Fetch content on-demand if story doesn't have full_content
-  useEffect(() => {
-    const loadContentOnDemand = async () => {
-      // Only fetch if story loaded, has URL, no content, and not already fetching
-      if (!story || !story.original_url || isLoadingContent || fetchedContent) return;
+  const fetchContentOnDemand = useCallback(async () => {
+    if (!story || !story.original_url) return;
 
-      // Check if content already exists
-      const existingContent = story.full_content;
-      if (existingContent && existingContent.length > 100) return;
+    // Check if content already exists
+    const existingContent = story.full_content;
+    if (existingContent && existingContent.length > 100) return;
 
-      setIsLoadingContent(true);
-      try {
-        const result = await fetchStoryContent(story.id, story.original_url);
-        if (result.content) {
-          setFetchedContent(result.content);
-        }
-      } catch (err) {
-        console.error('Failed to fetch content on-demand:', err);
-      } finally {
-        setIsLoadingContent(false);
+    // Don't fetch if already have fetched content
+    if (fetchedContent) return;
+
+    setIsLoadingContent(true);
+    setContentFetchFailed(false);
+
+    // Create timeout promise (30 seconds)
+    const timeoutPromise = new Promise<{ content: null; quality: 0 }>((_, reject) => {
+      setTimeout(() => reject(new Error('Content fetch timeout')), 30000);
+    });
+
+    try {
+      setContentFetchAttempts(prev => prev + 1);
+      const result = await Promise.race([
+        fetchStoryContent(story.id, story.original_url),
+        timeoutPromise
+      ]);
+      if (result.content) {
+        setFetchedContent(result.content);
+        setContentFetchFailed(false);
+      } else {
+        // API returned but no content extracted
+        setContentFetchFailed(true);
       }
-    };
+    } catch (err) {
+      console.error('Failed to fetch content on-demand:', err);
+      setContentFetchFailed(true);
+    } finally {
+      setIsLoadingContent(false);
+    }
+  }, [story?.id, story?.original_url, story?.full_content, fetchedContent]);
 
-    loadContentOnDemand();
-  }, [story?.id, story?.original_url, story?.full_content]);
+  // Auto-fetch on mount
+  useEffect(() => {
+    if (story && !fetchedContent && !isLoadingContent && contentFetchAttempts === 0) {
+      fetchContentOnDemand();
+    }
+  }, [story?.id]);
 
   const handleSave = useCallback(async () => {
     if (!user || !id) return;
@@ -147,13 +170,17 @@ export default function StoryDetailScreen() {
     );
   }
 
-  const title = isArabic ? story.title_ar : story.title_en;
+  const title = (isArabic ? story.title_ar : story.title_en) || story.original_title;
   const summary = isArabic ? story.summary_ar : story.summary_en;
   const whyItMatters = isArabic ? story.why_it_matters_ar : story.why_it_matters_en;
 
   // Use fetched content if available, otherwise use story's full_content
   const fullContent = fetchedContent || story.full_content;
   const hasFullContent = fullContent && fullContent.length > 100;
+
+  // RSS description as fallback when full_content is not available
+  const rssDescription = story.original_description;
+  const hasRssDescription = rssDescription && rssDescription.length > 20;
 
   // Image URL with fallback chain (same pattern as StoryCard)
   // 1. Try optimized URL (wsrv.nl) first
@@ -281,6 +308,59 @@ export default function StoryDetailScreen() {
               {isArabic ? 'جاري تحميل المقال...' : 'Loading full article...'}
             </Text>
           </View>
+        ) : summary ? (
+          /* Fallback: Show AI summary as preview when full content not available */
+          /* Mohammad's choice: AI summary instead of RSS description */
+          <View style={styles.articleSection}>
+            <View style={[styles.articleDivider, { backgroundColor: colors.border }]} />
+            <View style={styles.aiPreviewHeader}>
+              <View style={styles.aiBadgeSmall}>
+                <FontAwesome name="magic" size={10} color="#fff" />
+                <Text style={styles.aiBadgeText}>AI</Text>
+              </View>
+              <Text style={[styles.articleLabel, { color: colors.textMuted }, isArabic && styles.arabicText]}>
+                {isArabic ? 'ملخص' : 'Summary'}
+              </Text>
+            </View>
+            <Text style={[
+              isArabic ? styles.articleContentArabic : styles.articleContent,
+              { color: colors.textPrimary },
+              isArabic && styles.arabicText
+            ]}>
+              {summary}
+            </Text>
+            <Text style={[styles.noContentSubtext, { color: colors.textMuted, marginTop: 16 }, isArabic && styles.arabicText]}>
+              {isArabic
+                ? 'للمزيد من التفاصيل، اضغط على الزر أدناه لقراءة المقال الأصلي.'
+                : 'For more details, tap below to read the original article.'}
+            </Text>
+          </View>
+        ) : contentFetchFailed ? (
+          <View style={styles.noContentSection}>
+            <Text style={[styles.noContentText, { color: colors.textMuted }, isArabic && styles.arabicText]}>
+              {isArabic
+                ? 'تعذر تحميل المقال الكامل.'
+                : 'Could not load full article.'}
+            </Text>
+            {contentFetchAttempts < 3 && (
+              <TouchableOpacity
+                style={[styles.retryButton, { borderColor: colors.primary }]}
+                onPress={fetchContentOnDemand}
+                accessibilityRole="button"
+                accessibilityLabel={isArabic ? 'إعادة المحاولة' : 'Retry'}
+              >
+                <FontAwesome name="refresh" size={14} color={colors.primary} />
+                <Text style={[styles.retryButtonText, { color: colors.primary }]}>
+                  {isArabic ? 'إعادة المحاولة' : 'Retry'}
+                </Text>
+              </TouchableOpacity>
+            )}
+            <Text style={[styles.noContentSubtext, { color: colors.textMuted }, isArabic && styles.arabicText]}>
+              {isArabic
+                ? 'اضغط على الزر أدناه لقراءة المقال الأصلي.'
+                : 'Tap below to read the original article.'}
+            </Text>
+          </View>
         ) : (
           <View style={styles.noContentSection}>
             <Text style={[styles.noContentText, { color: colors.textMuted }, isArabic && styles.arabicText]}>
@@ -393,7 +473,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  scrollContent: {
+  content: {
     flex: 1,
   },
   image: {
@@ -511,6 +591,21 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
+  aiPreviewHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  aiBadgeSmall: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#A855F7',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    gap: 4,
+  },
   articleContent: {
     fontSize: 18,
     lineHeight: 32,
@@ -531,6 +626,29 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 24,
     fontStyle: 'italic',
+  },
+  noContentSubtext: {
+    fontSize: 14,
+    lineHeight: 22,
+    fontStyle: 'italic',
+    marginTop: 8,
+  },
+  retryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 16,
+    marginBottom: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignSelf: 'center',
+  },
+  retryButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
   },
   loadingContentSection: {
     paddingHorizontal: 20,

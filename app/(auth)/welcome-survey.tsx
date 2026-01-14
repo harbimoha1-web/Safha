@@ -1,42 +1,45 @@
 // Welcome Survey - First-time user onboarding
-// Shows value props, asks preferences, offers subscription
+// Beautiful onboarding with language toggle, animations, and glass cards
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FontAwesome } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import Animated, {
+  FadeIn,
+  FadeInDown,
+  FadeInUp,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withTiming,
+  interpolate,
+} from 'react-native-reanimated';
 import { useAppStore } from '@/stores';
 import { useTheme } from '@/contexts/ThemeContext';
-import { spacing, borderRadius, fontSize, fontWeight } from '@/constants/theme';
-import type { NewsFrequency } from '@/types';
+import { spacing, borderRadius, fontSize, fontWeight, shadow } from '@/constants/theme';
 
-type SurveyStep = 'welcome' | 'frequency' | 'offer';
+const { width } = Dimensions.get('window');
 
-const FREQUENCY_OPTIONS = [
-  { id: 'daily', labelAr: 'كل يوم', labelEn: 'Every day', icon: 'calendar-check-o' },
-  { id: 'weekly', labelAr: 'عدة مرات أسبوعياً', labelEn: 'A few times a week', icon: 'calendar' },
-  { id: 'casual', labelAr: 'عند الحاجة', labelEn: 'When I need it', icon: 'clock-o' },
-];
+type SurveyStep = 'welcome' | 'offer';
+
+const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
 
 export default function WelcomeSurveyScreen() {
   const [step, setStep] = useState<SurveyStep>('welcome');
-  const [selectedFrequency, setSelectedFrequency] = useState<NewsFrequency>(null);
-  const { settings, setSurveyCompleted, setNewsFrequency } = useAppStore();
+  const { settings, setSurveyCompleted, setLanguage } = useAppStore();
   const { colors } = useTheme();
   const isArabic = settings.language === 'ar';
 
   const handleComplete = (showSubscription: boolean) => {
-    // Save the frequency preference to persistent store
-    if (selectedFrequency) {
-      setNewsFrequency(selectedFrequency);
-    }
     setSurveyCompleted(true);
     if (showSubscription) {
       router.replace('/subscription');
@@ -46,145 +49,132 @@ export default function WelcomeSurveyScreen() {
   };
 
   const handleSkip = () => {
-    // Save frequency even on skip if selected
-    if (selectedFrequency) {
-      setNewsFrequency(selectedFrequency);
-    }
     setSurveyCompleted(true);
     router.replace('/(auth)/onboarding');
+  };
+
+  const toggleLanguage = () => {
+    setLanguage(isArabic ? 'en' : 'ar');
   };
 
   // Welcome step
   if (step === 'welcome') {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-          <View style={styles.header}>
-            <Text style={[styles.logo, { color: colors.textPrimary }]}>صفحة</Text>
-            <Text style={[styles.tagline, { color: colors.textSecondary }]}>
-              {isArabic ? 'اهتماماتك. منظمة. من مصادر موثوقة.' : 'Your interests. Organized. Trusted.'}
+        {/* Language Toggle */}
+        <Animated.View
+          entering={FadeIn.delay(600).duration(400)}
+          style={styles.langToggleContainer}
+        >
+          <TouchableOpacity
+            style={[styles.langToggle, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            onPress={toggleLanguage}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.langToggleText, { color: colors.textPrimary }]}>
+              {isArabic ? 'EN' : 'عربي'}
             </Text>
-          </View>
+          </TouchableOpacity>
+        </Animated.View>
 
+        <ScrollView
+          contentContainerStyle={styles.content}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Logo & Header */}
+          <Animated.View
+            entering={FadeInDown.delay(100).duration(600).springify()}
+            style={styles.header}
+          >
+            <Animated.Text
+              entering={FadeIn.delay(200).duration(800)}
+              style={[styles.logo, { color: colors.textPrimary }]}
+            >
+              صفحة
+            </Animated.Text>
+            <Animated.Text
+              entering={FadeIn.delay(400).duration(600)}
+              style={[styles.tagline, { color: colors.textSecondary }]}
+            >
+              {isArabic ? 'اهتماماتك. منظمة. من مصادر موثوقة.' : 'Your interests. Organized. Trusted.'}
+            </Animated.Text>
+          </Animated.View>
+
+          {/* Value Props - Glass Cards */}
           <View style={styles.valueProps}>
-            <View style={[styles.valueProp, { backgroundColor: colors.surface }]}>
+            <Animated.View
+              entering={FadeInUp.delay(300).duration(500).springify()}
+              style={[styles.valueProp, { backgroundColor: colors.surface }, shadow.sm]}
+            >
               <View style={[styles.valueIcon, { backgroundColor: colors.primaryLight }]}>
                 <FontAwesome name="magic" size={24} color={colors.primary} />
               </View>
               <View style={styles.valueText}>
-                <Text style={[styles.valueTitle, { color: colors.textPrimary }]}>
+                <Text style={[styles.valueTitle, { color: colors.textPrimary }, isArabic && styles.arabicText]}>
                   {isArabic ? 'ملخصات ذكية' : 'Smart Summaries'}
                 </Text>
-                <Text style={[styles.valueDesc, { color: colors.textSecondary }]}>
+                <Text style={[styles.valueDesc, { color: colors.textSecondary }, isArabic && styles.arabicText]}>
                   {isArabic ? 'الذكاء الاصطناعي يلخص كل ما تتابعه' : 'AI summarizes everything you follow'}
                 </Text>
               </View>
-            </View>
+            </Animated.View>
 
-            <View style={[styles.valueProp, { backgroundColor: colors.surface }]}>
+            <Animated.View
+              entering={FadeInUp.delay(400).duration(500).springify()}
+              style={[styles.valueProp, { backgroundColor: colors.surface }, shadow.sm]}
+            >
               <View style={[styles.valueIcon, { backgroundColor: colors.primaryLight }]}>
                 <FontAwesome name="shield" size={24} color={colors.primary} />
               </View>
               <View style={styles.valueText}>
-                <Text style={[styles.valueTitle, { color: colors.textPrimary }]}>
+                <Text style={[styles.valueTitle, { color: colors.textPrimary }, isArabic && styles.arabicText]}>
                   {isArabic ? 'مصادر موثوقة' : 'Trusted Sources'}
                 </Text>
-                <Text style={[styles.valueDesc, { color: colors.textSecondary }]}>
+                <Text style={[styles.valueDesc, { color: colors.textSecondary }, isArabic && styles.arabicText]}>
                   {isArabic ? 'محتوى مميز فقط، بدون ضوضاء' : 'Only quality content, no noise'}
                 </Text>
               </View>
-            </View>
+            </Animated.View>
 
-            <View style={[styles.valueProp, { backgroundColor: colors.surface }]}>
+            <Animated.View
+              entering={FadeInUp.delay(500).duration(500).springify()}
+              style={[styles.valueProp, { backgroundColor: colors.surface }, shadow.sm]}
+            >
               <View style={[styles.valueIcon, { backgroundColor: colors.primaryLight }]}>
                 <FontAwesome name="compass" size={24} color={colors.primary} />
               </View>
               <View style={styles.valueText}>
-                <Text style={[styles.valueTitle, { color: colors.textPrimary }]}>
+                <Text style={[styles.valueTitle, { color: colors.textPrimary }, isArabic && styles.arabicText]}>
                   {isArabic ? 'أكثر من أخبار' : 'Beyond News'}
                 </Text>
-                <Text style={[styles.valueDesc, { color: colors.textSecondary }]}>
+                <Text style={[styles.valueDesc, { color: colors.textSecondary }, isArabic && styles.arabicText]}>
                   {isArabic ? 'تقنية، رياضة، أسلوب حياة، والمزيد' : 'Tech, sports, lifestyle, and more'}
                 </Text>
               </View>
-            </View>
+            </Animated.View>
           </View>
 
-          <TouchableOpacity
-            style={[styles.primaryButton, { backgroundColor: colors.primary }]}
-            onPress={() => setStep('frequency')}
+          {/* CTA Button */}
+          <Animated.View entering={FadeInUp.delay(600).duration(500)}>
+            <TouchableOpacity
+              style={[styles.primaryButton, { backgroundColor: colors.primary }, shadow.md]}
+              onPress={() => setStep('offer')}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.primaryButtonText}>
+                {isArabic ? 'ابدأ الآن' : "Let's Get Started"}
+              </Text>
+            </TouchableOpacity>
+          </Animated.View>
+
+          {/* Step Indicator */}
+          <Animated.View
+            entering={FadeIn.delay(700).duration(400)}
+            style={styles.stepIndicator}
           >
-            <Text style={styles.primaryButtonText}>
-              {isArabic ? 'ابدأ الآن' : "Let's Get Started"}
-            </Text>
-          </TouchableOpacity>
-        </ScrollView>
-      </SafeAreaView>
-    );
-  }
-
-  // Frequency preference step
-  if (step === 'frequency') {
-    return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-        <View style={styles.stepHeader}>
-          <TouchableOpacity onPress={() => setStep('welcome')}>
-            <FontAwesome name="arrow-left" size={20} color={colors.textPrimary} />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={handleSkip}>
-            <Text style={[styles.skipText, { color: colors.textMuted }]}>
-              {isArabic ? 'تخطي' : 'Skip'}
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-          <Text style={[styles.questionTitle, { color: colors.textPrimary }, isArabic && styles.arabicText]}>
-            {isArabic ? 'كم مرة تريد متابعة اهتماماتك؟' : 'How often do you want to follow your interests?'}
-          </Text>
-          <Text style={[styles.questionSubtitle, { color: colors.textSecondary }, isArabic && styles.arabicText]}>
-            {isArabic ? 'نخصص تجربتك بناءً على تفضيلاتك' : "We'll personalize your experience"}
-          </Text>
-
-          <View style={styles.options}>
-            {FREQUENCY_OPTIONS.map((option) => (
-              <TouchableOpacity
-                key={option.id}
-                style={[
-                  styles.optionCard,
-                  { backgroundColor: colors.surface, borderColor: colors.border },
-                  selectedFrequency === option.id && { borderColor: colors.primary, backgroundColor: colors.primaryLight },
-                ]}
-                onPress={() => setSelectedFrequency(option.id as NewsFrequency)}
-              >
-                <FontAwesome
-                  name={option.icon as any}
-                  size={24}
-                  color={selectedFrequency === option.id ? colors.primary : colors.textMuted}
-                />
-                <Text style={[
-                  styles.optionText,
-                  { color: colors.textPrimary },
-                  selectedFrequency === option.id && { color: colors.primary },
-                ]}>
-                  {isArabic ? option.labelAr : option.labelEn}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          <TouchableOpacity
-            style={[
-              styles.primaryButton,
-              { backgroundColor: selectedFrequency ? colors.primary : colors.surfaceLight },
-            ]}
-            onPress={() => setStep('offer')}
-            disabled={!selectedFrequency}
-          >
-            <Text style={[styles.primaryButtonText, !selectedFrequency && { color: colors.textMuted }]}>
-              {isArabic ? 'التالي' : 'Next'}
-            </Text>
-          </TouchableOpacity>
+            <View style={[styles.stepDot, styles.stepDotActive, { backgroundColor: colors.primary }]} />
+            <View style={[styles.stepDot, { backgroundColor: colors.border }]} />
+          </Animated.View>
         </ScrollView>
       </SafeAreaView>
     );
@@ -193,19 +183,25 @@ export default function WelcomeSurveyScreen() {
   // Subscription offer step
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={styles.stepHeader}>
-        <TouchableOpacity onPress={() => setStep('frequency')}>
-          <FontAwesome name="arrow-left" size={20} color={colors.textPrimary} />
+      <Animated.View
+        entering={FadeIn.duration(300)}
+        style={styles.stepHeader}
+      >
+        <TouchableOpacity onPress={() => setStep('welcome')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <FontAwesome name={isArabic ? "arrow-right" : "arrow-left"} size={20} color={colors.textPrimary} />
         </TouchableOpacity>
         <TouchableOpacity onPress={handleSkip}>
           <Text style={[styles.skipText, { color: colors.textMuted }]}>
             {isArabic ? 'تخطي' : 'Skip'}
           </Text>
         </TouchableOpacity>
-      </View>
+      </Animated.View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={[styles.offerCard, { backgroundColor: colors.surface }]}>
+        <Animated.View
+          entering={FadeInUp.delay(100).duration(500).springify()}
+          style={[styles.offerCard, { backgroundColor: colors.surface }, shadow.lg]}
+        >
           <View style={styles.offerBadge}>
             <FontAwesome name="star" size={20} color="#FFD700" />
             <Text style={[styles.offerBadgeText, { color: colors.textPrimary }]}>صفحة+</Text>
@@ -239,25 +235,40 @@ export default function WelcomeSurveyScreen() {
           <Text style={[styles.offerPrice, { color: colors.textMuted }]}>
             {isArabic ? 'ثم 16 ريال/شهر فقط' : 'Then only SAR 16/month'}
           </Text>
-        </View>
+        </Animated.View>
 
-        <TouchableOpacity
-          style={[styles.primaryButton, { backgroundColor: '#FFD700' }]}
-          onPress={() => handleComplete(true)}
-        >
-          <Text style={[styles.primaryButtonText, { color: '#000' }]}>
-            {isArabic ? 'ابدأ التجربة المجانية' : 'Start Free Trial'}
-          </Text>
-        </TouchableOpacity>
+        <Animated.View entering={FadeInUp.delay(300).duration(400)}>
+          <TouchableOpacity
+            style={[styles.primaryButton, styles.goldButton, shadow.md]}
+            onPress={() => handleComplete(true)}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.primaryButtonText, { color: '#000' }]}>
+              {isArabic ? 'ابدأ التجربة المجانية' : 'Start Free Trial'}
+            </Text>
+          </TouchableOpacity>
+        </Animated.View>
 
-        <TouchableOpacity
-          style={[styles.secondaryButton, { borderColor: colors.border }]}
-          onPress={() => handleComplete(false)}
+        <Animated.View entering={FadeInUp.delay(400).duration(400)}>
+          <TouchableOpacity
+            style={[styles.secondaryButton, { borderColor: colors.border }]}
+            onPress={() => handleComplete(false)}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.secondaryButtonText, { color: colors.textSecondary }]}>
+              {isArabic ? 'تخطي' : 'Skip'}
+            </Text>
+          </TouchableOpacity>
+        </Animated.View>
+
+        {/* Step Indicator */}
+        <Animated.View
+          entering={FadeIn.delay(500).duration(400)}
+          style={styles.stepIndicator}
         >
-          <Text style={[styles.secondaryButtonText, { color: colors.textSecondary }]}>
-            {isArabic ? 'تابع مجاناً' : 'Continue for Free'}
-          </Text>
-        </TouchableOpacity>
+          <View style={[styles.stepDot, { backgroundColor: colors.border }]} />
+          <View style={[styles.stepDot, styles.stepDotActive, { backgroundColor: colors.primary }]} />
+        </Animated.View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -266,6 +277,22 @@ export default function WelcomeSurveyScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  langToggleContainer: {
+    position: 'absolute',
+    top: 60,
+    right: spacing.xl,
+    zIndex: 10,
+  },
+  langToggle: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+  },
+  langToggleText: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.medium,
   },
   content: {
     flexGrow: 1,
@@ -283,6 +310,7 @@ const styles = StyleSheet.create({
   tagline: {
     fontSize: fontSize.lg,
     marginTop: spacing.sm,
+    textAlign: 'center',
   },
   valueProps: {
     gap: spacing.md,
@@ -292,7 +320,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: spacing.lg,
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.lg,
     gap: spacing.md,
   },
   valueIcon: {
@@ -313,6 +341,9 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     marginTop: 2,
   },
+  arabicText: {
+    textAlign: 'right',
+  },
   stepHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -323,40 +354,13 @@ const styles = StyleSheet.create({
   skipText: {
     fontSize: fontSize.md,
   },
-  questionTitle: {
-    fontSize: fontSize.xxl,
-    fontWeight: fontWeight.bold,
-    textAlign: 'center',
-    marginBottom: spacing.sm,
-  },
-  questionSubtitle: {
-    fontSize: fontSize.md,
-    textAlign: 'center',
-    marginBottom: spacing.xxl,
-  },
-  arabicText: {
-    textAlign: 'right',
-  },
-  options: {
-    gap: spacing.md,
-    marginBottom: spacing.xxl,
-  },
-  optionCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: spacing.lg,
-    borderRadius: borderRadius.md,
-    borderWidth: 2,
-    gap: spacing.md,
-  },
-  optionText: {
-    fontSize: fontSize.md,
-    fontWeight: fontWeight.medium,
-  },
   primaryButton: {
     padding: spacing.lg,
     borderRadius: borderRadius.md,
     alignItems: 'center',
+  },
+  goldButton: {
+    backgroundColor: '#FFD700',
   },
   primaryButtonText: {
     color: '#fff',
@@ -411,5 +415,21 @@ const styles = StyleSheet.create({
   },
   offerPrice: {
     fontSize: fontSize.sm,
+  },
+  stepIndicator: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.xxl,
+  },
+  stepDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  stepDotActive: {
+    width: 24,
+    borderRadius: 4,
   },
 });

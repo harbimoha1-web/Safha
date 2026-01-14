@@ -1,13 +1,15 @@
-import { useCallback, useState } from 'react';
+import React, { useCallback, useState, memo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   Dimensions,
   ImageBackground,
+  Image,
   TouchableOpacity,
   Share,
   Modal,
+  ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { FontAwesome } from '@expo/vector-icons';
@@ -18,7 +20,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { ActionSheet, ActionSheetOption } from '@/components/ActionSheet';
 import { TopicFallback } from './TopicFallback';
 import { VideoPlayer } from './VideoPlayer';
-import { getOptimizedImageUrl } from '@/lib/image';
+import { getOptimizedImageUrl, getBlurredImageUrl } from '@/lib/image';
 
 const { width, height } = Dimensions.get('window');
 
@@ -32,10 +34,11 @@ interface StoryCardProps {
   onHideSource?: (sourceId: string, sourceName: string) => void;
 }
 
-export function StoryCard({ story, isActive, language, isSaved, onSave, onShare, onHideSource }: StoryCardProps) {
+// Memoized to prevent re-renders when only isActive changes but story data is the same
+export const StoryCard = memo(function StoryCard({ story, isActive, language, isSaved, onSave, onShare, onHideSource }: StoryCardProps) {
   const { colors } = useTheme();
   const isArabic = language === 'ar';
-  const title = isArabic ? story.title_ar : story.title_en;
+  const title = (isArabic ? story.title_ar : story.title_en) || story.original_title;
   const summary = isArabic ? story.summary_ar : story.summary_en;
 
   // Get first ~150 chars of original content for preview
@@ -46,11 +49,30 @@ export function StoryCard({ story, isActive, language, isSaved, onSave, onShare,
   const [imageError, setImageError] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
   const [useOriginalUrl, setUseOriginalUrl] = useState(false);
+  const [useSourceLogo, setUseSourceLogo] = useState(false);
 
   // Get optimized image URL (uses screen dimensions and DPR automatically)
-  // Fallback chain: optimized (wsrv.nl) → original → TopicFallback
-  const optimizedImageUrl = getOptimizedImageUrl(story.image_url);
-  const displayImageUrl = useOriginalUrl ? story.image_url : optimizedImageUrl;
+  // Fallback chain: optimized (wsrv.nl) → original → source logo → TopicFallback
+  // Sharp image uses contain mode to show full image without cropping
+  const optimizedImageUrl = getOptimizedImageUrl(story.image_url, undefined, undefined, 'contain');
+  const blurredImageUrl = getBlurredImageUrl(story.image_url);
+  const sourceLogoUrl = story.source?.logo_url;
+  const optimizedLogoUrl = sourceLogoUrl ? getOptimizedImageUrl(sourceLogoUrl, undefined, undefined, 'contain') : null;
+
+  // Determine which image URL to display (sharp foreground)
+  let displayImageUrl: string | null = null;
+  if (useSourceLogo && optimizedLogoUrl) {
+    displayImageUrl = optimizedLogoUrl;
+  } else if (useOriginalUrl) {
+    displayImageUrl = story.image_url;
+  } else {
+    displayImageUrl = optimizedImageUrl;
+  }
+
+  // Blurred background URL (always uses original story image)
+  const displayBlurredUrl = useSourceLogo ? null : blurredImageUrl;
+
+  // Has valid image only if we have a URL to try AND haven't exhausted all options
   const hasValidImage = displayImageUrl && !imageError;
 
   // Check for video content (only MP4 supported)
@@ -64,16 +86,23 @@ export function StoryCard({ story, isActive, language, isSaved, onSave, onShare,
     setImageLoaded(true);
   }, []);
 
-  // Handle image load error - try original URL before falling back to TopicFallback
+  // Handle image load error - fallback chain: optimized → original → source logo → TopicFallback
   const handleImageError = useCallback(() => {
-    if (!useOriginalUrl && story.image_url) {
-      // Try original URL if optimized URL failed
+    if (!useOriginalUrl && story.image_url && !useSourceLogo) {
+      // Step 1: Try original URL if optimized URL failed
+      console.log('[StoryCard] Optimized image failed, trying original');
       setUseOriginalUrl(true);
+    } else if (!useSourceLogo && sourceLogoUrl) {
+      // Step 2: Try source logo if original URL failed
+      console.log('[StoryCard] Original image failed, trying source logo');
+      setUseSourceLogo(true);
+      setUseOriginalUrl(false); // Reset to use optimized logo first
     } else {
-      // Both failed, show TopicFallback
+      // Step 3: All options exhausted, show TopicFallback
+      console.log('[StoryCard] All image options failed, showing TopicFallback');
       setImageError(true);
     }
-  }, [useOriginalUrl, story.image_url]);
+  }, [useOriginalUrl, useSourceLogo, story.image_url, sourceLogoUrl]);
 
   const handleSave = useCallback(() => {
     HapticFeedback.saveStory();
@@ -249,22 +278,47 @@ export function StoryCard({ story, isActive, language, isSaved, onSave, onShare,
         </View>
       ) : hasValidImage ? (
         <View style={styles.imageContainer}>
-          <ImageBackground
+          {/* Loading placeholder - shows until image loads */}
+          {!imageLoaded && (
+            <View style={styles.loadingPlaceholder}>
+              <LinearGradient
+                colors={['#1a1a1a', '#2d2d2d', '#1a1a1a']}
+                style={StyleSheet.absoluteFill}
+              />
+              <ActivityIndicator size="large" color="rgba(255,255,255,0.5)" />
+            </View>
+          )}
+
+          {/* Layer 1: Blurred background image (fills entire screen) */}
+          {displayBlurredUrl && (
+            <Image
+              source={{ uri: displayBlurredUrl }}
+              style={styles.blurredBackground}
+              resizeMode="cover"
+            />
+          )}
+
+          {/* Layer 2: Dark overlay on blurred background */}
+          <View style={styles.blurOverlay} />
+
+          {/* Layer 3: Sharp foreground image (contain mode - shows full image) */}
+          <Image
             source={{ uri: displayImageUrl }}
-            style={styles.backgroundImage}
-            resizeMode="cover"
+            style={[styles.sharpForeground, !imageLoaded && styles.imageHidden]}
+            resizeMode="contain"
             accessible={true}
             accessibilityLabel={title || undefined}
             onLoad={handleImageLoad}
             onError={handleImageError}
+          />
+
+          {/* Layer 4: Gradient overlay for text readability */}
+          <LinearGradient
+            colors={colors.cardGradient}
+            locations={[0, 0.5, 1]}
+            style={styles.gradient}
+            pointerEvents="box-none"
           >
-            {/* Gradient Overlay */}
-            <LinearGradient
-              colors={colors.cardGradient}
-              locations={[0, 0.5, 1]}
-              style={styles.gradient}
-              pointerEvents="box-none"
-            >
           {/* Content */}
           <View style={styles.content}>
             {/* Source Badge */}
@@ -380,7 +434,6 @@ export function StoryCard({ story, isActive, language, isSaved, onSave, onShare,
             </TouchableOpacity>
           </View>
         </LinearGradient>
-          </ImageBackground>
         </View>
       ) : (
         /* Fallback when no image available */
@@ -557,7 +610,7 @@ export function StoryCard({ story, isActive, language, isSaved, onSave, onShare,
       />
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: {
@@ -570,10 +623,33 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
+  blurredBackground: {
+    ...StyleSheet.absoluteFillObject,
+    width: '100%',
+    height: '100%',
+  },
+  blurOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.25)',
+  },
+  sharpForeground: {
+    ...StyleSheet.absoluteFillObject,
+    width: '100%',
+    height: '100%',
+  },
   backgroundImage: {
     flex: 1,
     width: '100%',
     height: '100%',
+  },
+  imageHidden: {
+    opacity: 0,
+  },
+  loadingPlaceholder: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1,
   },
   videoContainer: {
     flex: 1,

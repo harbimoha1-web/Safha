@@ -7,8 +7,11 @@ import {
   ScrollView,
   TouchableOpacity,
   Animated,
+  Image,
+  Dimensions,
 } from 'react-native';
-import PagerView from 'react-native-pager-view';
+// Use wrapper that handles web/native platform differences
+import { PagerView } from '@/components/PagerViewWrapper';
 import { FontAwesome } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { StoryCard } from '@/components/feed/StoryCard';
@@ -17,13 +20,16 @@ import { StreakBadge } from '@/components/StreakBadge';
 import { useAppStore, useAuthStore } from '@/stores';
 import { useSubscriptionStore } from '@/stores/subscription';
 import { useGamificationStore } from '@/stores/gamification';
-import { recordInteraction } from '@/lib/api';
-import { useStories, useSavedStories, useSaveStory, useUnsaveStory, useBlockSource } from '@/hooks';
+import { recordInteraction, resetFeedHistory } from '@/lib/api';
+import { useStories, useUnseenStories, useNewStoryPolling, useSavedStories, useSaveStory, useUnsaveStory, useBlockSource } from '@/hooks';
 import { useTheme } from '@/contexts/ThemeContext';
 import { PREFETCH_THRESHOLD, colors as defaultColors, spacing, borderRadius, fontSize, fontWeight } from '@/constants';
+import { getOptimizedImageUrl } from '@/lib/image';
+
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 export default function FeedScreen() {
-  const pagerRef = useRef<PagerView>(null);
+  const pagerRef = useRef<any>(null);
   const {
     currentStoryIndex,
     setCurrentStoryIndex,
@@ -32,6 +38,7 @@ export default function FeedScreen() {
     activeFilters,
     toggleActiveFilter,
     clearActiveFilters,
+    addToLocalHistory,
   } = useAppStore();
   const { user } = useAuthStore();
   const { isPremium } = useSubscriptionStore();
@@ -39,6 +46,7 @@ export default function FeedScreen() {
   const { colors } = useTheme();
   const isArabic = settings.language === 'ar';
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isResettingFeed, setIsResettingFeed] = useState(false);
   const [feedMode, setFeedMode] = useState<'interests' | 'explore'>('interests');
 
   // Reorder topics - active filters first
@@ -84,9 +92,18 @@ export default function FeedScreen() {
     if (selectedTopics.length === 0) return undefined;
 
     const validTopicIds = selectedTopics.map((t) => t.id).filter(isValidUUID);
-    return validTopicIds.length > 0 ? validTopicIds : undefined;
+    const result = validTopicIds.length > 0 ? validTopicIds : undefined;
+    console.log('[feed] topicIds computed:', result, 'feedMode:', feedMode, 'selectedTopics:', selectedTopics.length);
+    return result;
   }, [selectedTopics, activeFilters, feedMode]);
 
+  // Use unseen stories for logged-in users (no repeats)
+  // Fall back to regular stories for anonymous users
+  const unseenQuery = useUnseenStories(topicIds);
+  const regularQuery = useStories(topicIds);
+
+  // Select which query to use based on auth state
+  const activeQuery = user ? unseenQuery : regularQuery;
   const {
     data,
     isLoading,
@@ -96,12 +113,37 @@ export default function FeedScreen() {
     hasNextPage,
     isFetchingNextPage,
     refetch,
-  } = useStories(topicIds);
+  } = activeQuery;
+
+  // Get markAsSeen from unseen query (only available for logged-in users)
+  const markAsSeen = user ? unseenQuery.markAsSeen : undefined;
+  const refreshFeed = user ? unseenQuery.refreshFeed : undefined;
+
+  // Poll for new stories (only for logged-in users)
+  const { newStoryCount, hasNewStories, acknowledgeNewStories } = useNewStoryPolling(topicIds);
 
   // Flatten paginated data into a single array
   const stories = useMemo(() => {
-    return data?.pages.flat() ?? [];
-  }, [data]);
+    const flat = data?.pages.flat() ?? [];
+    console.log('[feed] Stories flattened:', flat.length, 'isLoading:', isLoading, 'isError:', isError, 'error:', error?.message);
+    return flat;
+  }, [data, isLoading, isError, error]);
+
+  // Prefetch images for next 3 stories for smooth swiping
+  useEffect(() => {
+    const prefetchCount = 3;
+    for (let i = currentStoryIndex + 1; i <= currentStoryIndex + prefetchCount && i < stories.length; i++) {
+      const story = stories[i];
+      if (story?.image_url) {
+        const optimizedUrl = getOptimizedImageUrl(story.image_url, SCREEN_WIDTH, SCREEN_HEIGHT);
+        if (optimizedUrl) {
+          Image.prefetch(optimizedUrl).catch(() => {
+            // Silently fail - fallback will handle
+          });
+        }
+      }
+    }
+  }, [currentStoryIndex, stories]);
 
   const handleSaveStory = useCallback(
     (storyId: string) => {
@@ -185,9 +227,20 @@ export default function FeedScreen() {
       setCurrentStoryIndex(position);
 
       // Track skip when user swipes to next story (didn't read more)
-      if (user && position > previousPosition && stories[previousPosition]) {
+      if (position > previousPosition && stories[previousPosition]) {
         const skippedStory = stories[previousPosition];
-        recordInteraction(user.id, skippedStory.id, 'skip').catch(console.error);
+
+        if (user) {
+          // Logged-in user: record to server
+          recordInteraction(user.id, skippedStory.id, 'skip').catch(console.error);
+          // Mark as seen in current session (immediate hide on next refresh)
+          if (markAsSeen) {
+            markAsSeen(skippedStory.id);
+          }
+        } else {
+          // Anonymous user: record to local history (no repeats)
+          addToLocalHistory(skippedStory.id);
+        }
       }
 
       // Prefetch next page when user is near the end
@@ -196,14 +249,19 @@ export default function FeedScreen() {
         fetchNextPage();
       }
     },
-    [setCurrentStoryIndex, currentStoryIndex, stories, user, hasNextPage, isFetchingNextPage, fetchNextPage]
+    [setCurrentStoryIndex, currentStoryIndex, stories, user, hasNextPage, isFetchingNextPage, fetchNextPage, markAsSeen, addToLocalHistory]
   );
 
   // Pull to refresh handler
   const onRefresh = useCallback(async () => {
     setIsRefreshing(true);
     try {
-      await refetch();
+      // Use refreshFeed for logged-in users (clears session seen set)
+      if (refreshFeed) {
+        refreshFeed();
+      } else {
+        await refetch();
+      }
       if (user) {
         await fetchStats();
       }
@@ -213,7 +271,39 @@ export default function FeedScreen() {
     } finally {
       setIsRefreshing(false);
     }
-  }, [refetch, user, fetchStats, setCurrentStoryIndex]);
+  }, [refetch, refreshFeed, user, fetchStats, setCurrentStoryIndex]);
+
+  // Handle "new stories" badge tap
+  const handleNewStoriesTap = useCallback(() => {
+    acknowledgeNewStories();
+    setCurrentStoryIndex(0);
+    pagerRef.current?.setPage(0);
+  }, [acknowledgeNewStories, setCurrentStoryIndex]);
+
+  // Handle "reset feed" - clear seen history and show stories again
+  const handleResetFeed = useCallback(async () => {
+    if (!user || isResettingFeed) return;
+
+    setIsResettingFeed(true);
+    try {
+      await resetFeedHistory(user.id);
+      // Clear session seen and refetch
+      if (refreshFeed) {
+        refreshFeed();
+      } else {
+        await refetch();
+      }
+      setCurrentStoryIndex(0);
+      pagerRef.current?.setPage(0);
+    } catch (error) {
+      Alert.alert(
+        isArabic ? 'خطأ' : 'Error',
+        isArabic ? 'فشل في إعادة تعيين الأخبار' : 'Failed to reset feed'
+      );
+    } finally {
+      setIsResettingFeed(false);
+    }
+  }, [user, isResettingFeed, refreshFeed, refetch, setCurrentStoryIndex, isArabic]);
 
   if (isLoading) {
     return <StoryCardSkeleton />;
@@ -241,7 +331,7 @@ export default function FeedScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Header with Refresh + Streak + Summary Button */}
+      {/* Header with Refresh + New Stories Badge + Streak + Summary Button */}
       <View style={styles.feedHeader}>
         <TouchableOpacity
           style={styles.refreshButton}
@@ -258,6 +348,20 @@ export default function FeedScreen() {
             />
           </Animated.View>
         </TouchableOpacity>
+        {/* New Stories Badge */}
+        {user && hasNewStories && (
+          <TouchableOpacity
+            style={styles.newStoriesBadge}
+            onPress={handleNewStoriesTap}
+            accessibilityRole="button"
+            accessibilityLabel={isArabic ? `${newStoryCount} أخبار جديدة` : `${newStoryCount} new stories`}
+          >
+            <FontAwesome name="arrow-up" size={12} color="#000" />
+            <Text style={styles.newStoriesBadgeText}>
+              {newStoryCount} {isArabic ? 'جديد' : 'new'}
+            </Text>
+          </TouchableOpacity>
+        )}
         <StreakBadge compact showWarning />
         <TouchableOpacity
             style={styles.safhaButton}
@@ -384,36 +488,62 @@ export default function FeedScreen() {
       {/* Content - Either Empty State OR PagerView */}
       {stories.length === 0 ? (
         <View style={styles.emptyStateContainer}>
-          <FontAwesome name="inbox" size={48} color={colors.textMuted} />
+          <FontAwesome name={user ? 'check-circle' : 'inbox'} size={48} color={user ? colors.primary : colors.textMuted} />
           <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-            {isArabic ? 'لا توجد أخبار لهذا الموضوع' : 'No stories for this topic'}
+            {user
+              ? (isArabic ? 'أنت على اطلاع بكل الأخبار!' : "You're all caught up!")
+              : (isArabic ? 'لا توجد أخبار لهذا الموضوع' : 'No stories for this topic')}
           </Text>
           <Text style={[styles.emptySubtext, { color: colors.textMuted }]}>
-            {isArabic ? 'اختر موضوعاً آخر أو اضغط "الكل"' : 'Select another topic or tap "All"'}
+            {user
+              ? (isArabic ? 'لقد قرأت جميع الأخبار المتاحة' : "You've read all available stories")
+              : (isArabic ? 'اختر موضوعاً آخر أو اضغط "الكل"' : 'Select another topic or tap "All"')}
           </Text>
+          {user && (
+            <TouchableOpacity
+              style={[styles.resetFeedButton, { backgroundColor: colors.primary }]}
+              onPress={handleResetFeed}
+              disabled={isResettingFeed}
+              accessibilityRole="button"
+              accessibilityLabel={isArabic ? 'عرض الأخبار مرة أخرى' : 'Show stories again'}
+            >
+              {isResettingFeed ? (
+                <Text style={styles.resetFeedButtonText}>
+                  {isArabic ? 'جارٍ التحميل...' : 'Loading...'}
+                </Text>
+              ) : (
+                <>
+                  <FontAwesome name="refresh" size={14} color="#fff" />
+                  <Text style={styles.resetFeedButtonText}>
+                    {isArabic ? 'عرض الأخبار مرة أخرى' : 'Show stories again'}
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+          )}
         </View>
       ) : (
         <PagerView
-        ref={pagerRef}
-        style={styles.pager}
-        initialPage={0}
-        orientation="vertical"
-        onPageSelected={onPageSelected}
-      >
-        {stories.map((story, index) => (
-          <View key={story.id} style={styles.page} collapsable={false}>
-            <StoryCard
-              story={story}
-              isActive={index === currentStoryIndex}
-              language={settings.language}
-              isSaved={savedStoryIds.has(story.id)}
-              onSave={handleSaveStory}
-              onShare={handleShareStory}
-              onHideSource={handleHideSource}
-            />
-          </View>
-        ))}
-      </PagerView>
+          ref={pagerRef}
+          style={styles.pager}
+          initialPage={0}
+          orientation="vertical"
+          onPageSelected={onPageSelected}
+        >
+          {stories.map((story, index) => (
+            <View key={story.id} style={styles.page} collapsable={false}>
+              <StoryCard
+                story={story}
+                isActive={index === currentStoryIndex}
+                language={settings.language}
+                isSaved={savedStoryIds.has(story.id)}
+                onSave={handleSaveStory}
+                onShare={handleShareStory}
+                onHideSource={handleHideSource}
+              />
+            </View>
+          ))}
+        </PagerView>
       )}
     </View>
   );
@@ -451,6 +581,27 @@ const styles = StyleSheet.create({
   },
   spinning: {
     opacity: 0.5,
+  },
+  newStoriesBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#4ADE80',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.full,
+    gap: spacing.xs,
+    // Shadow for iOS
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    // Shadow for Android
+    elevation: 4,
+  },
+  newStoriesBadgeText: {
+    color: '#000',
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.bold,
   },
   feedModeToggle: {
     position: 'absolute',
@@ -592,5 +743,19 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     textAlign: 'center',
     marginTop: spacing.sm,
+  },
+  resetFeedButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.full,
+    marginTop: spacing.xl,
+  },
+  resetFeedButtonText: {
+    color: '#fff',
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.semibold,
   },
 });

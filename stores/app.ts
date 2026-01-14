@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { Language, Theme, NewsFrequency, AppSettings, Topic } from '@/types';
+import type { Language, Theme, NewsFrequency, AppSettings, Topic, ContentLanguage } from '@/types';
 import { MAX_RECENT_SEARCHES } from '@/constants/config';
 
 interface AppState {
@@ -26,12 +26,16 @@ interface AppState {
   // Source Management - stores deselected sources (all enabled by default)
   deselectedSources: string[];
 
+  // Local History - tracks seen stories for anonymous users (max 100)
+  localHistory: string[];
+
   // Actions
   setLanguage: (language: Language) => void;
   setTheme: (theme: Theme) => void;
   setTextSize: (size: 'small' | 'medium' | 'large') => void;
   setAutoPlayVideos: (enabled: boolean) => void;
   setNewsFrequency: (frequency: NewsFrequency) => void;
+  setContentLanguage: (contentLanguage: ContentLanguage) => void;
   setSelectedTopics: (topics: Topic[]) => void;
   setAvailableTopics: (topics: Topic[]) => void;
   setOnboarded: (value: boolean) => void;
@@ -49,6 +53,9 @@ interface AppState {
   toggleAllVisibleSources: (sourceIds: string[]) => void;
   resetSourceSelections: () => void;
   areAllSourcesSelected: (sourceIds: string[]) => boolean;
+  // Local history actions
+  addToLocalHistory: (storyId: string) => void;
+  clearLocalHistory: () => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -56,10 +63,11 @@ export const useAppStore = create<AppState>()(
     (set) => ({
       settings: {
         language: 'ar',
-        theme: 'system',
+        theme: 'light',
         textSize: 'medium',
         autoPlayVideos: true,
         newsFrequency: null,
+        contentLanguage: 'all',
       },
       selectedTopics: [],
       availableTopics: [],
@@ -69,6 +77,7 @@ export const useAppStore = create<AppState>()(
       currentStoryIndex: 0,
       activeFilters: [],
       deselectedSources: [],
+      localHistory: [],
 
       setLanguage: (language) =>
         set((state) => ({
@@ -93,6 +102,11 @@ export const useAppStore = create<AppState>()(
       setNewsFrequency: (newsFrequency) =>
         set((state) => ({
           settings: { ...state.settings, newsFrequency },
+        })),
+
+      setContentLanguage: (contentLanguage) =>
+        set((state) => ({
+          settings: { ...state.settings, contentLanguage },
         })),
 
       setSelectedTopics: (selectedTopics) => set({ selectedTopics }),
@@ -178,6 +192,16 @@ export const useAppStore = create<AppState>()(
         const state = useAppStore.getState();
         return sourceIds.every((id) => !state.deselectedSources.includes(id));
       },
+
+      // Local history - max 100 stories, newest first
+      addToLocalHistory: (storyId) =>
+        set((state) => {
+          // Remove duplicate if exists, add to front, trim to 100
+          const filtered = state.localHistory.filter((id) => id !== storyId);
+          return { localHistory: [storyId, ...filtered].slice(0, 100) };
+        }),
+
+      clearLocalHistory: () => set({ localHistory: [] }),
     }),
     {
       name: 'safha-app-storage',
@@ -190,6 +214,7 @@ export const useAppStore = create<AppState>()(
         hasSurveyCompleted: state.hasSurveyCompleted,
         activeFilters: state.activeFilters,
         deselectedSources: state.deselectedSources,
+        localHistory: state.localHistory,
       }),
     }
   )

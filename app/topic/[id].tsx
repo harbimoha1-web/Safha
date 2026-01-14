@@ -6,9 +6,9 @@ import {
   StyleSheet,
   FlatList,
   TouchableOpacity,
-  Image,
   ActivityIndicator,
 } from 'react-native';
+import { OptimizedImage } from '@/components/OptimizedImage';
 import { useLocalSearchParams, router } from 'expo-router';
 import { FontAwesome } from '@expo/vector-icons';
 import { useAppStore } from '@/stores';
@@ -41,17 +41,21 @@ export default function TopicScreen() {
       style={[styles.storyCard, { backgroundColor: colors.surface }]}
       onPress={() => handleStoryPress(item.id)}
       accessibilityRole="button"
-      accessibilityLabel={(isArabic ? item.title_ar : item.title_en) || undefined}
+      accessibilityLabel={(isArabic ? item.title_ar : item.title_en) || item.original_title || undefined}
     >
-      {item.image_url && (
-        <Image source={{ uri: item.image_url }} style={styles.storyImage} />
-      )}
+      <OptimizedImage
+        url={item.image_url}
+        style={styles.storyImage}
+        height={180}
+        resizeMode="cover"
+        fallbackIcon="newspaper-o"
+      />
       <View style={styles.storyContent}>
         <Text
           style={[styles.storyTitle, { color: colors.textPrimary }, isArabic && styles.arabicText]}
           numberOfLines={2}
         >
-          {isArabic ? item.title_ar : item.title_en}
+          {(isArabic ? item.title_ar : item.title_en) || item.original_title}
         </Text>
         <Text
           style={[styles.storySummary, { color: colors.textSecondary }, isArabic && styles.arabicText]}

@@ -571,23 +571,6 @@ export default function ProfileScreen() {
         </View>
       </View>
 
-      {/* Admin Panel - Only visible to admins/moderators */}
-      {isAuthenticated && isAdminOrModerator() && (
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.textSecondary }, isArabic && styles.arabicText]}>
-            {isArabic ? 'لوحة الإدارة' : 'Admin'}
-          </Text>
-          <View style={[styles.sectionContent, { backgroundColor: colors.surface }]}>
-            <SettingsItem
-              icon="dashboard"
-              title={isArabic ? 'لوحة التحكم' : 'Admin Dashboard'}
-              iconColor="#A855F7"
-              onPress={() => router.push('/admin')}
-            />
-          </View>
-        </View>
-      )}
-
       {/* About */}
       <View style={styles.section}>
         <Text style={[styles.sectionTitle, { color: colors.textSecondary }, isArabic && styles.arabicText]}>
@@ -631,6 +614,23 @@ export default function ProfileScreen() {
           />
         </View>
       </View>
+
+      {/* Admin Section - Only visible to admins/moderators */}
+      {isAuthenticated && isAdminOrModerator && (
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: colors.textSecondary }, isArabic && styles.arabicText]}>
+            {isArabic ? 'الإدارة' : 'Admin'}
+          </Text>
+          <View style={[styles.sectionContent, { backgroundColor: colors.surface }]}>
+            <SettingsItem
+              icon="dashboard"
+              title={isArabic ? 'لوحة التحكم' : 'Admin Dashboard'}
+              onPress={() => router.push('/admin')}
+              iconColor="#EF4444"
+            />
+          </View>
+        </View>
+      )}
 
       {/* Sign Out */}
       {isAuthenticated && (

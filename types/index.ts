@@ -177,6 +177,7 @@ export type Language = 'ar' | 'en';
 export type Theme = 'light' | 'dark' | 'system';
 export type NewsFrequency = 'daily' | 'weekly' | 'casual' | null;
 export type LanguageFilter = 'all' | 'ar' | 'en';
+export type ContentLanguage = 'all' | 'ar' | 'en';
 
 export interface TopicSourceMapping {
   topic_id: string;
@@ -189,6 +190,7 @@ export interface AppSettings {
   textSize: 'small' | 'medium' | 'large';
   autoPlayVideos: boolean;
   newsFrequency: NewsFrequency;
+  contentLanguage: ContentLanguage;
 }
 
 // Admin Types

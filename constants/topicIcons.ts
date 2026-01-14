@@ -31,7 +31,9 @@ export type TopicIconName =
   | 'book'
   | 'magic'
   | 'tree'
-  | 'eye';
+  | 'eye'
+  | 'television'
+  | 'coffee';
 
 // Map topic slugs to FontAwesome icon names
 export const TOPIC_ICONS: Record<string, TopicIconName> = {
@@ -63,6 +65,10 @@ export const TOPIC_ICONS: Record<string, TopicIconName> = {
   outdoors: 'tree',
   'oddly-satisfying': 'eye',
   'home-garden': 'home',
+  // New topics (2026-01-13)
+  shows: 'television',
+  'daily-life': 'coffee',
+  society: 'globe',
   // Legacy mappings for backwards compatibility
   entertainment: 'film',
   health: 'heartbeat',
@@ -111,6 +117,10 @@ export const TOPIC_COLORS: Record<string, string> = {
   outdoors: '#22C55E',
   'oddly-satisfying': '#7C3AED',
   'home-garden': '#059669',
+  // New topics (2026-01-13)
+  shows: '#A78BFA',
+  'daily-life': '#78716C',
+  society: '#0EA5E9',
   // Legacy mappings for backwards compatibility
   entertainment: '#FFEAA7',
   health: '#DDA0DD',

@@ -9,17 +9,93 @@ import {
 } from 'react-native';
 import { FontAwesome } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import Animated, {
+  FadeIn,
+  FadeInUp,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+} from 'react-native-reanimated';
 import { useAppStore } from '@/stores';
 import { useSubscriptionStore } from '@/stores/subscription';
 import { useTopics } from '@/hooks';
 import { useTheme } from '@/contexts/ThemeContext';
-import { spacing, borderRadius, fontSize, fontWeight } from '@/constants';
+import { spacing, borderRadius, fontSize, fontWeight, shadow } from '@/constants';
 import { getTopicIcon, getTopicColor } from '@/constants/topicIcons';
 import { TopicGridSkeleton } from '@/components/SkeletonLoader';
 import type { Topic } from '@/types';
 
-// UUID validation regex for cleanup check
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// Horizontal chip-style Topic selector - readable, fast, scannable
+function TopicChip({
+  topic,
+  isSelected,
+  onPress,
+  index,
+  colors,
+  isArabic,
+}: {
+  topic: Topic;
+  isSelected: boolean;
+  onPress: () => void;
+  index: number;
+  colors: any;
+  isArabic: boolean;
+}) {
+  const scale = useSharedValue(1);
+  const topicColor = topic.color || getTopicColor(topic.slug);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  const handlePressIn = () => {
+    scale.value = withSpring(0.95, { damping: 15 });
+  };
+
+  const handlePressOut = () => {
+    scale.value = withSpring(1, { damping: 15 });
+  };
+
+  return (
+    <Animated.View
+      entering={FadeIn.duration(200)}
+      style={animatedStyle}
+    >
+      <TouchableOpacity
+        style={[
+          styles.chip,
+          isArabic && styles.chipRtl,
+          { backgroundColor: isSelected ? topicColor : colors.surface },
+          !isSelected && { borderWidth: 1, borderColor: colors.border },
+          isSelected && { ...shadow.md, shadowColor: topicColor },
+        ]}
+        onPress={onPress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        activeOpacity={0.7}
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: isSelected }}
+        accessibilityLabel={isArabic ? topic.name_ar : topic.name_en}
+        accessibilityHint={isArabic ? 'انقر مرتين للتبديل' : 'Double tap to toggle'}
+      >
+        <FontAwesome
+          name={getTopicIcon(topic.slug)}
+          size={18}
+          color={isSelected ? '#FFFFFF' : topicColor}
+        />
+        <Text
+          style={[
+            styles.chipText,
+            { color: isSelected ? '#FFFFFF' : colors.textPrimary },
+          ]}
+          numberOfLines={1}
+        >
+          {isArabic ? topic.name_ar : topic.name_en}
+        </Text>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+}
 
 export default function OnboardingScreen() {
   const { data: topics = [], isLoading: isLoadingTopics, isError, refetch } = useTopics();
@@ -29,6 +105,8 @@ export default function OnboardingScreen() {
   const { isPremium } = useSubscriptionStore();
   const topicLimit = useSubscriptionStore((state) => state.getTopicLimit());
   const { colors } = useTheme();
+
+  const isArabic = settings.language === 'ar';
 
   // Hydrate local state from store on mount (for editing existing selections)
   useEffect(() => {
@@ -49,18 +127,19 @@ export default function OnboardingScreen() {
     });
   };
 
+  // No minimum required - users can proceed with any number of topics (including 0)
   const handleContinue = () => {
-    if (selectedIds.size < 3) {
-      return;
-    }
-
     const selected = topics.filter((t) => selectedIds.has(t.id));
     setSelectedTopics(selected);
     setOnboarded(true);
-    router.replace('/(tabs)/feed');
+    router.replace('/(tabs)/search');
   };
 
-  const isArabic = settings.language === 'ar';
+  const handleSkip = () => {
+    setSelectedTopics([]);
+    setOnboarded(true);
+    router.replace('/(tabs)/search');
+  };
 
   // Show error state if topics failed to load
   if (isError || (!isLoadingTopics && topics.length === 0)) {
@@ -95,106 +174,103 @@ export default function OnboardingScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
-      <View style={styles.header}>
+      <Animated.View entering={FadeIn.duration(400)} style={styles.header}>
         <TouchableOpacity
-          style={styles.closeButton}
+          style={styles.backButton}
           onPress={() => router.back()}
           accessibilityRole="button"
-          accessibilityLabel={isArabic ? 'إغلاق' : 'Close'}
+          accessibilityLabel={isArabic ? 'رجوع' : 'Back'}
         >
-          <FontAwesome name="times" size={24} color={colors.textPrimary} />
+          <FontAwesome name={isArabic ? 'arrow-right' : 'arrow-left'} size={20} color={colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={[styles.title, { color: colors.textPrimary }]}>
+        <TouchableOpacity onPress={handleSkip}>
+          <Text style={[styles.skipText, { color: colors.textMuted }]}>
+            {isArabic ? 'تخطي' : 'Skip'}
+          </Text>
+        </TouchableOpacity>
+      </Animated.View>
+
+      {/* Title */}
+      <Animated.View entering={FadeInUp.delay(100).duration(400)} style={styles.titleContainer}>
+        <Text style={[styles.title, { color: colors.textPrimary }, isArabic && styles.arabicText]}>
           {isArabic ? 'اختر اهتماماتك' : 'Choose Your Interests'}
         </Text>
-        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+        <Text style={[styles.subtitle, { color: colors.textSecondary }, isArabic && styles.arabicText]}>
           {isArabic
             ? 'نغطي كل ما يهمك - من الأخبار للرياضة للتقنية والمزيد'
             : 'We cover everything you care about - news, sports, tech, and more'}
         </Text>
-      </View>
+      </Animated.View>
 
-      {/* Topics Grid */}
+      {/* Topics - Horizontal chip flow */}
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={styles.topicsGrid}
+        contentContainerStyle={[
+          styles.chipsContainer,
+          isArabic && styles.chipsContainerRtl,
+        ]}
         showsVerticalScrollIndicator={false}
       >
         {isLoadingTopics ? (
-          <TopicGridSkeleton count={8} />
+          <TopicGridSkeleton count={12} />
         ) : (
-          topics.map((topic) => {
-            const isSelected = selectedIds.has(topic.id);
-            const topicColor = topic.color || getTopicColor(topic.slug);
-            return (
-              <TouchableOpacity
-                key={topic.id}
-                style={[
-                  styles.topicCard,
-                  { backgroundColor: colors.surface },
-                  topicColor && { borderColor: topicColor },
-                  isSelected && topicColor && { backgroundColor: topicColor },
-                ]}
-                onPress={() => toggleTopic(topic.id)}
-                activeOpacity={0.7}
-              >
-                <FontAwesome
-                  name={getTopicIcon(topic.slug)}
-                  size={32}
-                  color={isSelected ? '#FFFFFF' : topicColor}
-                />
-                <Text
-                  style={[
-                    styles.topicName,
-                    { color: colors.textPrimary },
-                    isSelected && styles.topicNameSelected,
-                  ]}
-                >
-                  {isArabic ? topic.name_ar : topic.name_en}
-                </Text>
-              </TouchableOpacity>
-            );
-          })
+          topics.map((topic, index) => (
+            <TopicChip
+              key={topic.id}
+              topic={topic}
+              isSelected={selectedIds.has(topic.id)}
+              onPress={() => toggleTopic(topic.id)}
+              index={index}
+              colors={colors}
+              isArabic={isArabic}
+            />
+          ))
         )}
       </ScrollView>
 
-      {/* Continue Button */}
-      <View style={[styles.footer, { borderTopColor: colors.border }]}>
+      {/* Footer */}
+      <Animated.View
+        entering={FadeInUp.delay(300).duration(400)}
+        style={[styles.footer, { borderTopColor: colors.border, backgroundColor: colors.background }]}
+      >
         <Text style={[styles.selectedCount, { color: colors.textSecondary }]}>
           {selectedIds.size} / {isPremium ? '∞' : topicLimit}{' '}
           {isArabic ? 'مواضيع محددة' : 'topics selected'}
         </Text>
+
         {!isPremium && selectedIds.size >= topicLimit && (
-          <TouchableOpacity
-            style={styles.upgradePrompt}
-            onPress={() => router.push('/subscription')}
-            accessibilityRole="button"
-            accessibilityLabel={isArabic ? 'اشترك للمزيد' : 'Upgrade for unlimited topics'}
-          >
-            <FontAwesome name="star" size={14} color="#FFD700" />
-            <Text style={[styles.upgradeText, { color: colors.primary }]}>
-              {isArabic ? 'اشترك للمزيد' : 'Upgrade for unlimited topics'}
-            </Text>
-          </TouchableOpacity>
+          <Animated.View entering={FadeIn.duration(300)}>
+            <TouchableOpacity
+              style={styles.upgradePrompt}
+              onPress={() => router.push('/subscription')}
+              accessibilityRole="button"
+              accessibilityLabel={isArabic ? 'اشترك للمزيد' : 'Upgrade for unlimited topics'}
+            >
+              <FontAwesome name="star" size={14} color="#FFD700" />
+              <Text style={[styles.upgradeText, { color: colors.primary }]}>
+                {isArabic ? 'اشترك للمزيد من المواضيع' : 'Upgrade for unlimited topics'}
+              </Text>
+            </TouchableOpacity>
+          </Animated.View>
         )}
+
         <TouchableOpacity
-          style={[
-            styles.continueButton,
-            { backgroundColor: colors.primary },
-            selectedIds.size < 3 && [styles.continueButtonDisabled, { backgroundColor: colors.surfaceLight }],
-          ]}
+          style={[styles.continueButton, { backgroundColor: colors.primary }, shadow.sm]}
           onPress={handleContinue}
-          disabled={selectedIds.size < 3 || isSaving}
+          disabled={isSaving}
+          activeOpacity={0.8}
         >
           {isSaving ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text style={[styles.continueButtonText, selectedIds.size < 3 && { color: colors.textMuted }]}>
-              {isArabic ? 'متابعة' : 'Continue'}
+            <Text style={styles.continueButtonText}>
+              {selectedIds.size === 0
+                ? (isArabic ? 'تخطي' : 'Skip')
+                : (isArabic ? 'متابعة' : 'Continue')}
             </Text>
           )}
         </TouchableOpacity>
-      </View>
+      </Animated.View>
     </View>
   );
 }
@@ -205,58 +281,68 @@ const styles = StyleSheet.create({
     paddingTop: 60,
   },
   header: {
-    paddingHorizontal: spacing.xl,
-    marginBottom: spacing.xxl,
-    position: 'relative',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.md,
   },
-  closeButton: {
-    position: 'absolute',
-    top: 0,
-    right: spacing.xl,
+  backButton: {
     padding: spacing.sm,
-    zIndex: 10,
+  },
+  skipText: {
+    fontSize: fontSize.md,
+  },
+  titleContainer: {
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.md,
   },
   title: {
     fontSize: fontSize.xxl,
     fontWeight: fontWeight.bold,
-    marginBottom: spacing.sm,
+    marginBottom: spacing.xs,
   },
   subtitle: {
-    fontSize: fontSize.md,
-    lineHeight: 22,
+    fontSize: fontSize.sm,
+    lineHeight: 20,
+    marginBottom: spacing.md,
+  },
+  arabicText: {
+    textAlign: 'right',
   },
   scrollView: {
     flex: 1,
   },
-  topicsGrid: {
+  chipsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     paddingHorizontal: spacing.lg,
     gap: spacing.md,
-    paddingBottom: spacing.xl,
+    paddingBottom: spacing.xxl,
   },
-  topicCard: {
-    width: '47%',
-    aspectRatio: 1.5,
-    borderRadius: borderRadius.lg,
-    borderWidth: 2,
-    justifyContent: 'center',
+  chipsContainerRtl: {
+    flexDirection: 'row-reverse',
+  },
+  chip: {
+    flexDirection: 'row',
     alignItems: 'center',
+    minHeight: 48,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderRadius: 24,
     gap: spacing.sm,
   },
-  topicIcon: {
-    fontSize: 32,
+  chipRtl: {
+    flexDirection: 'row-reverse',
   },
-  topicName: {
+  chipText: {
     fontSize: fontSize.md,
-    fontWeight: fontWeight.semibold,
-  },
-  topicNameSelected: {
-    color: '#000',
+    fontWeight: fontWeight.medium,
+    lineHeight: 21,
   },
   footer: {
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.xl,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
     borderTopWidth: 1,
   },
   selectedCount: {
@@ -269,7 +355,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.sm,
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
     paddingVertical: spacing.sm,
   },
   upgradeText: {
@@ -278,15 +364,12 @@ const styles = StyleSheet.create({
   },
   continueButton: {
     borderRadius: borderRadius.md,
-    padding: spacing.lg,
+    padding: spacing.md,
     alignItems: 'center',
-  },
-  continueButtonDisabled: {
-    // backgroundColor applied dynamically
   },
   continueButtonText: {
     color: '#fff',
-    fontSize: fontSize.lg,
+    fontSize: fontSize.md,
     fontWeight: fontWeight.semibold,
   },
   errorContainer: {

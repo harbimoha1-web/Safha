@@ -1,0 +1,10 @@
+# Supabase Edge Functions Configuration
+# This file configures function-specific settings
+
+# fetch-content: Fetches public article content on-demand
+# Disable JWT verification because:
+# 1. It fetches PUBLIC article content (no user-specific data)
+# 2. Uses SERVICE_ROLE_KEY internally for database updates
+# 3. Should work for all users (logged in or not)
+[functions.fetch-content]
+verify_jwt = false

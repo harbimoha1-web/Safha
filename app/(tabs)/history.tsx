@@ -5,10 +5,10 @@ import {
   StyleSheet,
   FlatList,
   TouchableOpacity,
-  Image,
   RefreshControl,
 } from 'react-native';
 import { HistoryItemSkeleton } from '@/components/SkeletonLoader';
+import { OptimizedImage } from '@/components/OptimizedImage';
 import { FontAwesome } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useAppStore, useAuthStore } from '@/stores';
@@ -83,11 +83,6 @@ export default function HistoryScreen() {
         <Text style={[styles.headerTitle, isArabic && styles.arabicText]}>
           {isArabic ? 'سجل القراءة' : 'Reading History'}
         </Text>
-        {stories.length > 0 && (
-          <Text style={styles.countText}>
-            {stories.length} {isArabic ? 'مقال' : 'articles'}
-          </Text>
-        )}
       </View>
 
       {stories.length === 0 ? (
@@ -119,17 +114,22 @@ export default function HistoryScreen() {
               style={styles.storyCard}
               onPress={() => handleStoryPress(item.id)}
               accessibilityRole="button"
-              accessibilityLabel={(isArabic ? item.title_ar : item.title_en) || undefined}
+              accessibilityLabel={(isArabic ? item.title_ar : item.title_en) || item.original_title || undefined}
             >
-              {item.image_url && (
-                <Image source={{ uri: item.image_url }} style={styles.storyImage} />
-              )}
+              <OptimizedImage
+                url={item.image_url}
+                style={styles.storyImage}
+                width={100}
+                height={100}
+                resizeMode="cover"
+                fallbackIcon="history"
+              />
               <View style={styles.storyContent}>
                 <Text
                   style={[styles.storyTitle, isArabic && styles.arabicText]}
                   numberOfLines={2}
                 >
-                  {isArabic ? item.title_ar : item.title_en}
+                  {(isArabic ? item.title_ar : item.title_en) || item.original_title}
                 </Text>
                 <View style={styles.storyMeta}>
                   {item.source && (
@@ -171,10 +171,6 @@ const styles = StyleSheet.create({
   },
   arabicText: {
     textAlign: 'right',
-  },
-  countText: {
-    color: '#888',
-    fontSize: 14,
   },
   loadingContainer: {
     flex: 1,

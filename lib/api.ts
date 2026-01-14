@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import type { Story, Topic, Source, Profile, SavedStory, Note, BlockedSource, TopicSourceMapping } from '@/types';
+import type { Story, Topic, Source, Profile, SavedStory, Note, BlockedSource, TopicSourceMapping, ContentLanguage } from '@/types';
 import {
   StoryQuerySchema,
   SearchQuerySchema,
@@ -35,24 +35,41 @@ export async function getStories(
   limit = 20,
   offset = 0,
   topicIds?: string[],
-  blockedSourceIds?: string[]
+  blockedSourceIds?: string[],
+  contentLanguage?: ContentLanguage
 ): Promise<Story[]> {
   // Validate inputs
   const validated = validateInput(StoryQuerySchema, { limit, offset, topicIds });
 
+  // Use inner join when filtering by language to ensure source exists
+  const selectQuery = contentLanguage && contentLanguage !== 'all'
+    ? '*, source:sources!inner(*)'
+    : STORY_SELECT;
+
   let query = supabase
     .from('stories')
-    .select(STORY_SELECT)
-    .order('published_at', { ascending: false });
+    .select(selectQuery)
+    .eq('is_approved', true)  // Only show approved stories
+    .order('published_at', { ascending: false })
+    .order('created_at', { ascending: false });  // Secondary sort for consistent ordering
+
+  // Filter by source language if specified
+  if (contentLanguage && contentLanguage !== 'all') {
+    query = query.eq('source.language', contentLanguage);
+  }
 
   // Filter by topics if provided
   if (validated.topicIds && validated.topicIds.length > 0) {
     query = query.overlaps('topic_ids', validated.topicIds);
   }
 
-  // Filter out blocked sources
+  // Filter out blocked sources (with UUID validation to prevent injection)
   if (blockedSourceIds && blockedSourceIds.length > 0) {
-    query = query.not('source_id', 'in', `(${blockedSourceIds.join(',')})`);
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const validBlockedIds = blockedSourceIds.filter(id => UUID_REGEX.test(id));
+    if (validBlockedIds.length > 0) {
+      query = query.not('source_id', 'in', `(${validBlockedIds.join(',')})`);
+    }
   }
 
   const { data, error } = await query.range(
@@ -64,6 +81,113 @@ export async function getStories(
     throw new APIError(`Failed to fetch stories: ${error.message}`, 500, error.code);
   }
   return data || [];
+}
+
+// Get unseen stories (server-side filtering via RPC)
+// Filters out stories the user has already viewed or skipped
+export async function getUnseenStories(
+  userId: string,
+  limit = 20,
+  offset = 0,
+  topicIds?: string[],
+  blockedSourceIds?: string[],
+  contentLanguage?: ContentLanguage
+): Promise<Story[]> {
+  const validUserId = validateInput(UserIdSchema, userId);
+  const validated = validateInput(StoryQuerySchema, { limit, offset, topicIds });
+
+  const { data, error } = await supabase.rpc('get_unseen_stories', {
+    p_user_id: validUserId,
+    p_limit: validated.limit,
+    p_offset: validated.offset,
+    p_topic_ids: validated.topicIds || null,
+    p_blocked_source_ids: blockedSourceIds || null,
+  });
+
+  console.log('[getUnseenStories] RPC params:', { userId: validUserId, limit: validated.limit, offset: validated.offset, topicIds: validated.topicIds, contentLanguage });
+  console.log('[getUnseenStories] RPC returned:', data?.length ?? 0, 'stories, error:', error?.message ?? 'none');
+
+  if (error) {
+    // Fallback to regular getStories if RPC doesn't exist yet
+    if (error.code === 'PGRST202' || error.message?.includes('function')) {
+      console.warn('get_unseen_stories RPC not available, falling back to getStories');
+      return getStories(limit, offset, topicIds, blockedSourceIds, contentLanguage);
+    }
+    throw new APIError(`Failed to fetch unseen stories: ${error.message}`, 500, error.code);
+  }
+
+  // RPC returns raw stories without source relation, fetch with sources
+  if (data && data.length > 0) {
+    const storyIds = data.map((s: Story) => s.id);
+    const { data: storiesWithSources } = await supabase
+      .from('stories')
+      .select(STORY_SELECT)
+      .in('id', storyIds);
+
+    console.log('[getUnseenStories] Fetched with sources:', storiesWithSources?.length ?? 0);
+
+    if (storiesWithSources) {
+      // Preserve order from RPC results
+      const storyMap = new Map(storiesWithSources.map((s) => [s.id, s]));
+      let stories = data.map((s: Story) => storyMap.get(s.id) || s);
+
+      // Filter by content language if specified (include stories with missing source)
+      if (contentLanguage && contentLanguage !== 'all') {
+        const beforeFilter = stories.length;
+        stories = stories.filter((s: Story) => !s.source || s.source.language === contentLanguage);
+        console.log('[getUnseenStories] Language filter:', beforeFilter, '->', stories.length);
+      }
+
+      console.log('[getUnseenStories] Returning:', stories.length, 'stories');
+      return stories;
+    }
+  }
+
+  // No unseen stories available - return empty, let UI show "caught up" state
+  console.log('[getUnseenStories] No unseen stories available');
+  return [];
+}
+
+// Get count of new stories since a timestamp (for "X new stories" badge)
+export async function getNewStoryCount(
+  userId: string,
+  since: string,
+  topicIds?: string[]
+): Promise<number> {
+  const validUserId = validateInput(UserIdSchema, userId);
+
+  const { data, error } = await supabase.rpc('get_new_story_count', {
+    p_user_id: validUserId,
+    p_since: since,
+    p_topic_ids: topicIds || null,
+  });
+
+  if (error) {
+    // Return 0 if RPC doesn't exist yet
+    if (error.code === 'PGRST202' || error.message?.includes('function')) {
+      console.warn('get_new_story_count RPC not available');
+      return 0;
+    }
+    throw new APIError(`Failed to get new story count: ${error.message}`, 500, error.code);
+  }
+
+  return data || 0;
+}
+
+// Reset user's feed history (clear view/skip interactions)
+// Used when user has "caught up" and wants to see stories again
+export async function resetFeedHistory(userId: string): Promise<void> {
+  const validUserId = validateInput(UserIdSchema, userId);
+
+  const { error } = await supabase
+    .from('user_story_interactions')
+    .delete()
+    .eq('user_id', validUserId)
+    .in('interaction_type', ['view', 'skip']);
+
+  if (error) {
+    throw new APIError(`Failed to reset feed history: ${error.message}`, 500, error.code);
+  }
 }
 
 export async function getStoryById(id: string): Promise<Story | null> {
@@ -97,8 +221,12 @@ export async function fetchStoryContent(
     return { content: null, quality: 0 };
   }
 
+  // Get the current session's access token for authenticated requests
+  const { data: { session } } = await supabase.auth.getSession();
+  const accessToken = session?.access_token || supabaseAnonKey;
+
   const maxRetries = 3;
-  let lastError: any;
+  let lastError: Error | null = null;
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
@@ -112,7 +240,7 @@ export async function fetchStoryContent(
           headers: {
             'Content-Type': 'application/json',
             'apikey': supabaseAnonKey,
-            'Authorization': `Bearer ${supabaseAnonKey}`,
+            'Authorization': `Bearer ${accessToken}`,
           },
           body: JSON.stringify({ story_id: storyId, url: originalUrl }),
           signal: controller.signal,
@@ -152,12 +280,12 @@ export async function fetchStoryContent(
       }
 
       return { content: null, quality: 0 };
-    } catch (err: any) {
-      lastError = err;
-      if (err.name === 'AbortError') {
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      if (lastError.name === 'AbortError') {
         console.log(`Fetch attempt ${attempt} timed out`);
       } else {
-        console.log(`Fetch attempt ${attempt} error:`, err.message);
+        console.log(`Fetch attempt ${attempt} error:`, lastError.message);
       }
 
       if (attempt < maxRetries) {
@@ -452,13 +580,20 @@ export async function recordInteraction(
 
   const { error } = await supabase
     .from('user_story_interactions')
-    .upsert({
-      user_id: validUserId,
-      story_id: validStoryId,
-      interaction_type: validType,
-    });
+    .upsert(
+      {
+        user_id: validUserId,
+        story_id: validStoryId,
+        interaction_type: validType,
+      },
+      {
+        onConflict: 'user_id,story_id,interaction_type',
+        ignoreDuplicates: true,
+      }
+    );
 
-  if (error) {
+  // Ignore duplicate key errors (23505) - they're expected with the unique constraint
+  if (error && error.code !== '23505') {
     throw new APIError(`Failed to record interaction: ${error.message}`, 500, error.code);
   }
 }
@@ -672,6 +807,282 @@ export async function getTopicSourceMapping(): Promise<TopicSourceMapping[]> {
       return [];
     }
     throw new APIError(`Failed to fetch topic-source mapping: ${error.message}`, 500, error.code);
+  }
+  return data || [];
+}
+
+// ============================================
+// ADMIN API FUNCTIONS
+// ============================================
+
+// Get all sources (including inactive) for admin
+export async function getAllSources(): Promise<Source[]> {
+  const { data, error } = await supabase
+    .from('sources')
+    .select('*')
+    .order('name');
+
+  if (error) {
+    throw new APIError(`Failed to fetch all sources: ${error.message}`, 500, error.code);
+  }
+  return data || [];
+}
+
+// Update source (admin) - handles partial updates
+export async function updateSource(sourceData: Partial<Source>): Promise<Source> {
+  if (!sourceData.id) {
+    throw new APIError('Source ID is required', 400, 'MISSING_ID');
+  }
+
+  // Build update object with only provided fields
+  const updateData: Record<string, unknown> = {};
+  if (sourceData.name !== undefined) updateData.name = sourceData.name;
+  if (sourceData.url !== undefined) updateData.url = sourceData.url;
+  if (sourceData.logo_url !== undefined) updateData.logo_url = sourceData.logo_url;
+  if (sourceData.is_active !== undefined) updateData.is_active = sourceData.is_active;
+
+  const { data, error } = await supabase
+    .from('sources')
+    .update(updateData)
+    .eq('id', sourceData.id)
+    .select()
+    .single();
+
+  if (error) {
+    throw new APIError(`Failed to update source: ${error.message}`, 500, error.code);
+  }
+  return data;
+}
+
+// Get source-topic assignments for admin
+export async function getSourceTopics(): Promise<{ source_id: string; topic_ids: string[] }[]> {
+  const { data, error } = await supabase
+    .from('source_topics')
+    .select('source_id, topic_id');
+
+  if (error) {
+    // Return empty if table doesn't exist yet
+    if (error.code === 'PGRST204' || error.message?.includes('does not exist')) {
+      return [];
+    }
+    throw new APIError(`Failed to fetch source topics: ${error.message}`, 500, error.code);
+  }
+
+  // Group by source_id
+  const grouped = (data || []).reduce((acc: Record<string, string[]>, item) => {
+    if (!acc[item.source_id]) {
+      acc[item.source_id] = [];
+    }
+    acc[item.source_id].push(item.topic_id);
+    return acc;
+  }, {});
+
+  return Object.entries(grouped).map(([source_id, topic_ids]) => ({
+    source_id,
+    topic_ids,
+  }));
+}
+
+// Update source-topic assignments (admin)
+export async function updateSourceTopics(
+  sourceId: string,
+  topicIds: string[]
+): Promise<void> {
+  // Delete existing assignments
+  const { error: deleteError } = await supabase
+    .from('source_topics')
+    .delete()
+    .eq('source_id', sourceId);
+
+  if (deleteError && deleteError.code !== 'PGRST204') {
+    throw new APIError(`Failed to clear source topics: ${deleteError.message}`, 500, deleteError.code);
+  }
+
+  // Insert new assignments
+  if (topicIds.length > 0) {
+    const insertData = topicIds.map((topicId) => ({
+      source_id: sourceId,
+      topic_id: topicId,
+    }));
+
+    const { error: insertError } = await supabase
+      .from('source_topics')
+      .insert(insertData);
+
+    if (insertError) {
+      throw new APIError(`Failed to update source topics: ${insertError.message}`, 500, insertError.code);
+    }
+  }
+}
+
+// ============================================
+// ADMIN ANALYTICS API
+// ============================================
+
+export interface AdminDashboardStatsResponse {
+  total_users: number;
+  premium_users: number;
+  users_today: number;
+  active_users_daily: number;
+  active_users_weekly: number;
+  active_users_monthly: number;
+  total_stories: number;
+  stories_today: number;
+  pending_stories: number;
+  total_sources: number;
+  active_sources: number;
+  total_topics: number;
+  active_topics: number;
+}
+
+export interface TopStory {
+  id: string;
+  title_ar: string | null;
+  title_en: string | null;
+  original_title: string | null;
+  image_url: string | null;
+  source_name: string | null;
+  view_count: number;
+  save_count: number;
+  share_count: number;
+  engagement_score: number;
+  published_at: string | null;
+}
+
+export interface SourcePerformance {
+  source_id: string;
+  source_name: string;
+  logo_url: string | null;
+  language: string;
+  is_active: boolean;
+  story_count: number;
+  total_views: number;
+  total_saves: number;
+  total_shares: number;
+  avg_engagement: number;
+}
+
+export interface EngagementTrend {
+  date: string;
+  active_users: number;
+  views: number;
+  saves: number;
+  shares: number;
+  new_users: number;
+}
+
+export interface SourceStoryCount {
+  source_id: string;
+  story_count: number;
+  stories_this_week: number;
+}
+
+// Get admin dashboard stats
+export async function getAdminDashboardStats(): Promise<AdminDashboardStatsResponse> {
+  const { data, error } = await supabase.rpc('get_admin_dashboard_stats');
+
+  if (error) {
+    throw new APIError(`Failed to fetch dashboard stats: ${error.message}`, 500, error.code);
+  }
+  return data;
+}
+
+// Get top stories by engagement
+export async function getTopStoriesByEngagement(
+  limit = 10,
+  days = 7
+): Promise<TopStory[]> {
+  const { data, error } = await supabase.rpc('get_top_stories_by_engagement', {
+    p_limit: limit,
+    p_days: days,
+  });
+
+  if (error) {
+    throw new APIError(`Failed to fetch top stories: ${error.message}`, 500, error.code);
+  }
+  return data || [];
+}
+
+// Get source performance
+export async function getSourcePerformance(
+  limit = 20,
+  days = 30
+): Promise<SourcePerformance[]> {
+  const { data, error } = await supabase.rpc('get_source_performance', {
+    p_limit: limit,
+    p_days: days,
+  });
+
+  if (error) {
+    throw new APIError(`Failed to fetch source performance: ${error.message}`, 500, error.code);
+  }
+  return data || [];
+}
+
+// Get engagement trends
+export async function getEngagementTrends(days = 14): Promise<EngagementTrend[]> {
+  const { data, error } = await supabase.rpc('get_engagement_trends', {
+    p_days: days,
+  });
+
+  if (error) {
+    throw new APIError(`Failed to fetch engagement trends: ${error.message}`, 500, error.code);
+  }
+  return data || [];
+}
+
+// Get all topics (including inactive) for admin
+export async function getAllTopics(): Promise<Topic[]> {
+  const { data, error } = await supabase.rpc('get_all_topics_admin');
+
+  if (error) {
+    // Fallback to direct query
+    const { data: fallbackData, error: fallbackError } = await supabase
+      .from('topics')
+      .select('*')
+      .order('sort_order');
+
+    if (fallbackError) {
+      throw new APIError(`Failed to fetch topics: ${fallbackError.message}`, 500, fallbackError.code);
+    }
+    return fallbackData || [];
+  }
+  return data || [];
+}
+
+// Update topic (admin)
+export async function updateTopic(topicData: Partial<Topic>): Promise<Topic> {
+  if (!topicData.id) {
+    throw new APIError('Topic ID is required', 400, 'MISSING_ID');
+  }
+
+  const { data, error } = await supabase.rpc('update_topic_admin', {
+    p_topic_id: topicData.id,
+    p_name_ar: topicData.name_ar,
+    p_name_en: topicData.name_en,
+    p_slug: topicData.slug,
+    p_icon: topicData.icon,
+    p_color: topicData.color,
+    p_is_active: topicData.is_active,
+    p_sort_order: topicData.sort_order,
+  });
+
+  if (error) {
+    throw new APIError(`Failed to update topic: ${error.message}`, 500, error.code);
+  }
+  return data;
+}
+
+// Get source story counts
+export async function getSourceStoryCounts(): Promise<SourceStoryCount[]> {
+  const { data, error } = await supabase.rpc('get_source_story_counts');
+
+  if (error) {
+    // Return empty if function doesn't exist
+    if (error.code === 'PGRST202') {
+      return [];
+    }
+    throw new APIError(`Failed to fetch source story counts: ${error.message}`, 500, error.code);
   }
   return data || [];
 }

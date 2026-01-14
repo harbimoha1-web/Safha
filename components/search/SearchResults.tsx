@@ -1,4 +1,5 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Switch, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, ActivityIndicator } from 'react-native';
+import { OptimizedImage } from '@/components/OptimizedImage';
 import { FontAwesome } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -165,13 +166,15 @@ function SourceResultItem({ source, isArabic }: { source: Source; isArabic: bool
       accessibilityRole="switch"
       accessibilityState={{ checked: isSelected }}
     >
-      {source.logo_url ? (
-        <Image source={{ uri: source.logo_url }} style={styles.sourceLogo} />
-      ) : (
-        <View style={[styles.sourceLogoPlaceholder, { backgroundColor: colors.surfaceLight }]}>
-          <FontAwesome name="newspaper-o" size={16} color={colors.textMuted} />
-        </View>
-      )}
+      <OptimizedImage
+        url={source.logo_url}
+        style={styles.sourceLogo}
+        width={40}
+        height={40}
+        resizeMode="cover"
+        fallbackIcon="newspaper-o"
+        fallbackIconSize={16}
+      />
       <View style={styles.itemInfo}>
         <Text style={[styles.itemName, { color: colors.textPrimary }]} numberOfLines={1}>
           {source.name}
@@ -203,7 +206,7 @@ function SourceResultItem({ source, isArabic }: { source: Source; isArabic: bool
 function StoryResultItem({ story, isArabic, onPress }: { story: Story; isArabic: boolean; onPress: () => void }) {
   const { colors } = useTheme();
 
-  const title = isArabic ? story.title_ar : story.title_en;
+  const title = (isArabic ? story.title_ar : story.title_en) || story.original_title;
   const sourceName = story.source?.name || '';
   const date = story.published_at
     ? new Date(story.published_at).toLocaleDateString(isArabic ? 'ar-SA' : 'en-US', {
@@ -224,9 +227,14 @@ function StoryResultItem({ story, isArabic, onPress }: { story: Story; isArabic:
       accessibilityRole="button"
       accessibilityLabel={title || 'Story'}
     >
-      {story.image_url && (
-        <Image source={{ uri: story.image_url }} style={styles.storyImage} />
-      )}
+      <OptimizedImage
+        url={story.image_url}
+        style={styles.storyImage}
+        width={80}
+        height={80}
+        resizeMode="cover"
+        fallbackIcon="newspaper-o"
+      />
       <View style={styles.storyContent}>
         <Text style={[styles.storyTitle, { color: colors.textPrimary }]} numberOfLines={2}>
           {title}
