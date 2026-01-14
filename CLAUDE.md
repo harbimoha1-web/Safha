@@ -1,7 +1,7 @@
 # Safha (Teller) - CLAUDE.md
 
 **THEBOLDS Project Context**
-**Last Updated**: 2026-01-14
+**Last Updated**: 2026-01-14 (The Eye ULTRATHINK Audit Remediation)
 
 ---
 
@@ -67,6 +67,9 @@ Lessons learned on THIS project. Synced to global lessons-learned.md.
 | SAFHA-005 | Two tables exist: `sources` (display) vs `rss_sources` (RSS URLs for backend) - don't confuse them | Backend | 2026-01-15 | Pending |
 | SAFHA-006 | Use wsrv.nl server-side blur for Spotify-style backgrounds - no client dependencies needed | Frontend | 2026-01-14 | Pending |
 | SAFHA-007 | Extract videos from article HTML not just RSS - og:video, twitter:player, iframes, video tags | Backend | 2026-01-14 | Pending |
+| SAFHA-008 | Use `createLogger()` from lib/debug.ts for all logging - auto-suppressed in production | Code Quality | 2026-01-14 | Pending |
+| SAFHA-009 | All interactive elements need bilingual accessibility labels (en/ar) with accessibilityRole | Accessibility | 2026-01-14 | Pending |
+| SAFHA-010 | Never use raw console.* in client code - causes data leakage, bundle bloat, perf issues | Code Quality | 2026-01-14 | Pending |
 
 ### Lesson Details
 
@@ -114,6 +117,41 @@ Lessons learned on THIS project. Synced to global lessons-learned.md.
 - **Platforms**: YouTube, Vimeo, Dailymotion, direct MP4
 - **Priority**: Webpage video > RSS video (HTML is more reliable)
 - **Recorded By**: Claude
+- **Global ID**: _Pending sync_
+
+#### SAFHA-008: Use createLogger() for All Logging
+- **Context**: The Eye audit found 150+ console.* statements leaking data in production
+- **Lesson**: Import `createLogger` from `lib/debug.ts` and use `log.debug/info/warn/error` instead of console.*
+- **Pattern**:
+  ```typescript
+  import { createLogger } from '@/lib/debug';
+  const log = createLogger('ComponentName');
+  log.debug('message');  // Suppressed in production
+  log.error('error');    // Always shown (errors are important)
+  ```
+- **Recorded By**: The Eye
+- **Global ID**: _Pending sync_
+
+#### SAFHA-009: Bilingual Accessibility Labels Required
+- **Context**: StoryCard buttons had no screen reader support - failed accessibility audit
+- **Lesson**: Every TouchableOpacity needs `accessibilityRole="button"` and bilingual `accessibilityLabel`
+- **Pattern**:
+  ```tsx
+  <TouchableOpacity
+    accessibilityRole="button"
+    accessibilityLabel={isArabic ? 'حفظ الخبر' : 'Save story'}
+  >
+  ```
+- **Components Fixed**: StoryCard (save, share, menu, AI summary, modal)
+- **Recorded By**: The Eye
+- **Global ID**: _Pending sync_
+
+#### SAFHA-010: No Raw Console Statements in Client Code
+- **Context**: Production app was logging user data, API responses, and debug info to console
+- **Lesson**: Raw console.* causes: (1) Data leakage, (2) Bundle bloat, (3) Performance hit
+- **Fix**: Use lib/debug.ts which checks `__DEV__` and suppresses in production
+- **Exception**: Edge Functions (Deno) have separate logging strategy
+- **Recorded By**: The Eye
 - **Global ID**: _Pending sync_
 
 ---
@@ -173,6 +211,11 @@ Audit findings and accountability notes for this project:
 | 2026-01-15 | 10 English RSS sources broken (404/403/timeout) | Medium | Resolved |
 | 2026-01-14 | Images zoomed too much with cover mode - quality loss | Medium | Resolved |
 | 2026-01-14 | Videos in article HTML not being extracted | Medium | Resolved |
+| 2026-01-14 | 150+ console.* statements in production code - data leakage risk | Critical | Resolved |
+| 2026-01-14 | StoryCard buttons missing accessibility labels | High | Resolved |
+| 2026-01-14 | SQL injection risk in fetch-rss via string interpolation | Critical | Resolved |
+| 2026-01-14 | CORS set to `*` in edge function - too permissive | High | Resolved |
+| 2026-01-14 | 275 temp files (tmpclaude-*) polluting repository | Low | Resolved |
 
 ---
 
