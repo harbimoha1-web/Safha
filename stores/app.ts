@@ -60,7 +60,7 @@ interface AppState {
 
 export const useAppStore = create<AppState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       settings: {
         language: 'ar',
         theme: 'light',
@@ -188,8 +188,8 @@ export const useAppStore = create<AppState>()(
 
       resetSourceSelections: () => set({ deselectedSources: [] }),
 
-      areAllSourcesSelected: (sourceIds) => {
-        const state = useAppStore.getState();
+      areAllSourcesSelected: (sourceIds: string[]): boolean => {
+        const state = get();
         return sourceIds.every((id) => !state.deselectedSources.includes(id));
       },
 

@@ -130,7 +130,9 @@ export function SourceManagement({ isArabic }: SourceManagementProps) {
               id: 'uncategorized',
               name_ar: 'مصادر أخرى',
               name_en: 'Other Sources',
+              slug: 'uncategorized',
               icon: 'folder-o',
+              color: '#888888',
               is_active: true,
               sort_order: 999,
             }}

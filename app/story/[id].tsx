@@ -431,6 +431,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  content: {
+    flex: 1,
+  },
   errorText: {
     color: '#fff',
     fontSize: 18,

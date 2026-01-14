@@ -59,7 +59,7 @@ describe('useSavedStories', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     (getSavedStories as jest.Mock).mockResolvedValue(mockSavedStories);
-    (useAuthStore as jest.Mock).mockReturnValue({ user: { id: 'user123' } });
+    (useAuthStore as unknown as jest.Mock).mockReturnValue({ user: { id: 'user123' } });
   });
 
   it('should fetch saved stories for authenticated user', async () => {
@@ -73,7 +73,7 @@ describe('useSavedStories', () => {
   });
 
   it('should not fetch when user is not authenticated', async () => {
-    (useAuthStore as jest.Mock).mockReturnValue({ user: null });
+    (useAuthStore as unknown as jest.Mock).mockReturnValue({ user: null });
 
     const wrapper = createWrapper();
     const { result } = renderHook(() => useSavedStories(), { wrapper });
@@ -99,7 +99,7 @@ describe('useSavedStoryIds', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     (getSavedStories as jest.Mock).mockResolvedValue(mockSavedStories);
-    (useAuthStore as jest.Mock).mockReturnValue({ user: { id: 'user123' } });
+    (useAuthStore as unknown as jest.Mock).mockReturnValue({ user: { id: 'user123' } });
   });
 
   it('should return a Set of saved story IDs', async () => {
@@ -127,7 +127,7 @@ describe('useSavedStoryIds', () => {
   });
 
   it('should return empty Set when user not authenticated', async () => {
-    (useAuthStore as jest.Mock).mockReturnValue({ user: null });
+    (useAuthStore as unknown as jest.Mock).mockReturnValue({ user: null });
 
     const wrapper = createWrapper();
     const { result } = renderHook(() => useSavedStoryIds(), { wrapper });
@@ -142,7 +142,7 @@ describe('useSaveStory', () => {
     jest.clearAllMocks();
     (saveStory as jest.Mock).mockResolvedValue({ success: true });
     (getSavedStories as jest.Mock).mockResolvedValue(mockSavedStories);
-    (useAuthStore as jest.Mock).mockReturnValue({ user: { id: 'user123' } });
+    (useAuthStore as unknown as jest.Mock).mockReturnValue({ user: { id: 'user123' } });
   });
 
   it('should save a story', async () => {
@@ -175,7 +175,7 @@ describe('useUnsaveStory', () => {
     jest.clearAllMocks();
     (unsaveStory as jest.Mock).mockResolvedValue({ success: true });
     (getSavedStories as jest.Mock).mockResolvedValue(mockSavedStories);
-    (useAuthStore as jest.Mock).mockReturnValue({ user: { id: 'user123' } });
+    (useAuthStore as unknown as jest.Mock).mockReturnValue({ user: { id: 'user123' } });
   });
 
   it('should unsave a story', async () => {

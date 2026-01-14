@@ -51,8 +51,8 @@ export default function FeedScreen() {
 
   // Reorder topics - active filters first
   const orderedTopics = useMemo(() => {
-    const active = selectedTopics.filter((t) => activeFilters.includes(t.id));
-    const inactive = selectedTopics.filter((t) => !activeFilters.includes(t.id));
+    const active = selectedTopics.filter((t: { id: string }) => activeFilters.includes(t.id));
+    const inactive = selectedTopics.filter((t: { id: string }) => !activeFilters.includes(t.id));
     return [...active, ...inactive];
   }, [selectedTopics, activeFilters]);
 
@@ -91,10 +91,8 @@ export default function FeedScreen() {
 
     if (selectedTopics.length === 0) return undefined;
 
-    const validTopicIds = selectedTopics.map((t) => t.id).filter(isValidUUID);
-    const result = validTopicIds.length > 0 ? validTopicIds : undefined;
-    console.log('[feed] topicIds computed:', result, 'feedMode:', feedMode, 'selectedTopics:', selectedTopics.length);
-    return result;
+    const validTopicIds = selectedTopics.map((t: { id: string }) => t.id).filter(isValidUUID);
+    return validTopicIds.length > 0 ? validTopicIds : undefined;
   }, [selectedTopics, activeFilters, feedMode]);
 
   // Use unseen stories for logged-in users (no repeats)

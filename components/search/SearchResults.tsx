@@ -111,12 +111,12 @@ function TopicResultItem({ topic, isArabic }: { topic: Topic; isArabic: boolean 
   const { colors } = useTheme();
   const { selectedTopics, setSelectedTopics } = useAppStore();
 
-  const isSelected = selectedTopics.some((t) => t.id === topic.id);
+  const isSelected = selectedTopics.some((t: Topic) => t.id === topic.id);
   const topicColor = topic.color || getTopicColor(topic.slug);
 
   const handleToggle = () => {
     if (isSelected) {
-      setSelectedTopics(selectedTopics.filter((t) => t.id !== topic.id));
+      setSelectedTopics(selectedTopics.filter((t: Topic) => t.id !== topic.id));
     } else {
       setSelectedTopics([...selectedTopics, topic]);
     }

@@ -116,7 +116,7 @@ describe('Payment Webhook Integration', () => {
         .single();
 
       expect(existingPayment).not.toBeNull();
-      expect(existingPayment.status).toBe('paid');
+      expect(existingPayment!.status).toBe('paid');
       // Should return early without processing again
     });
 
@@ -340,7 +340,7 @@ describe('Payment Webhook Integration', () => {
         metadata: {
           plan: 'premium',
           type: 'subscription',
-        },
+        } as { user_id?: string; plan?: string; type?: string },
       };
 
       const userId = paymentWithoutUserId.metadata?.user_id;
@@ -353,7 +353,7 @@ describe('Payment Webhook Integration', () => {
         metadata: {
           user_id: mockUserId,
           type: 'subscription',
-        },
+        } as { user_id?: string; plan?: string; type?: string },
       };
 
       const plan = paymentWithoutPlan.metadata?.plan;
@@ -365,7 +365,7 @@ describe('Payment Webhook Integration', () => {
         ...mockPaidPayment,
         metadata: {
           type: 'one_time_purchase',
-        },
+        } as { user_id?: string; plan?: string; type?: string },
       };
 
       const isSubscription = nonSubscriptionPayment.metadata?.type === 'subscription';
@@ -375,7 +375,7 @@ describe('Payment Webhook Integration', () => {
     it('should handle missing metadata', () => {
       const paymentWithoutMetadata = {
         ...mockPaidPayment,
-        metadata: undefined,
+        metadata: undefined as { user_id?: string; plan?: string; type?: string } | undefined,
       };
 
       const isSubscription = paymentWithoutMetadata.metadata?.type === 'subscription';
@@ -452,7 +452,7 @@ describe('Payment Webhook Integration', () => {
       });
 
       expect(error).not.toBeNull();
-      expect(error.message).toBe('Database connection failed');
+      expect(error!.message).toBe('Database connection failed');
     });
 
     it('should handle subscription upsert errors', async () => {

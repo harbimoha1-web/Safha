@@ -302,13 +302,12 @@ describe('Moyasar Payment Integration', () => {
   describe('verifyWebhookSignature', () => {
     // Mock crypto.subtle for testing
     beforeAll(() => {
-      // @ts-ignore
       global.crypto = {
         subtle: {
           importKey: jest.fn().mockResolvedValue('mockKey'),
           sign: jest.fn().mockResolvedValue(new Uint8Array([0x12, 0x34, 0x56])),
-        },
-      };
+        } as unknown as SubtleCrypto,
+      } as Crypto;
     });
 
     it('should return false for missing parameters', async () => {
