@@ -317,7 +317,7 @@ export const StoryCard = memo(function StoryCard({ story, isActive, language, is
 
           {/* Layer 3: Sharp foreground image (contain mode - shows full image) */}
           <Image
-            source={{ uri: displayImageUrl }}
+            source={{ uri: displayImageUrl || undefined }}
             style={[styles.sharpForeground, !imageLoaded && styles.imageHidden]}
             resizeMode="contain"
             accessible={true}

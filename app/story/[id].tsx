@@ -479,9 +479,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  content: {
-    flex: 1,
-  },
   image: {
     width: '100%',
     height: 300,
