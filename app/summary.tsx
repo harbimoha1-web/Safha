@@ -20,6 +20,9 @@ import { router } from 'expo-router';
 import { FontAwesome } from '@expo/vector-icons';
 import { useAppStore } from '@/stores';
 import { useSummaryStore } from '@/stores/summary';
+import { createLogger } from '@/lib/debug';
+
+const log = createLogger('Summary');
 import { getDailySummaryStories } from '@/lib/api';
 import { useTheme } from '@/contexts/ThemeContext';
 import {
@@ -84,7 +87,7 @@ export default function SummaryScreen() {
       const stories = await getDailySummaryStories(undefined, 5);
       generateSummary(stories, settings.language);
     } catch (err) {
-      console.error('Failed to load summary:', err);
+      log.error('Failed to load summary:', err);
       setLoading(false);
     }
   };
@@ -111,7 +114,7 @@ export default function SummaryScreen() {
 
       await Share.share({ message: shareText });
     } catch (err) {
-      console.error('Share error:', err);
+      log.error('Share error:', err);
     }
   };
 

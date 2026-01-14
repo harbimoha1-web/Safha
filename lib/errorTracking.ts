@@ -5,7 +5,9 @@
 // 3. Add SENTRY_DSN to environment
 
 // import * as Sentry from '@sentry/react-native';
+import { createLogger } from './debug';
 
+const log = createLogger('ErrorTracking');
 const IS_PRODUCTION = process.env.EXPO_PUBLIC_IS_PRODUCTION === 'true';
 
 /**
@@ -14,14 +16,14 @@ const IS_PRODUCTION = process.env.EXPO_PUBLIC_IS_PRODUCTION === 'true';
  */
 export function initializeErrorTracking(): void {
   if (!IS_PRODUCTION) {
-    console.log('Error tracking: Development mode - logging to console');
+    log.info('Development mode - logging to console');
     return;
   }
 
   // Uncomment when Sentry is installed:
   // const SENTRY_DSN = process.env.EXPO_PUBLIC_SENTRY_DSN;
   // if (!SENTRY_DSN) {
-  //   console.warn('SENTRY_DSN not configured');
+  //   log.warn('SENTRY_DSN not configured');
   //   return;
   // }
   //
@@ -33,7 +35,7 @@ export function initializeErrorTracking(): void {
   //   attachStacktrace: true,
   // });
 
-  console.log('Error tracking: Initialized');
+  log.info('Initialized');
 }
 
 /**
@@ -44,9 +46,9 @@ export function captureException(
   context?: Record<string, unknown>
 ): void {
   // Log to console in all environments
-  console.error('Captured exception:', error);
+  log.error('Captured exception:', error);
   if (context) {
-    console.error('Context:', context);
+    log.error('Context:', context);
   }
 
   // Uncomment when Sentry is installed:
@@ -65,7 +67,7 @@ export function captureMessage(
   level: 'info' | 'warning' | 'error' = 'info',
   context?: Record<string, unknown>
 ): void {
-  const logMethod = level === 'error' ? console.error : level === 'warning' ? console.warn : console.log;
+  const logMethod = level === 'error' ? log.error : level === 'warning' ? log.warn : log.info;
   logMethod(`[${level.toUpperCase()}] ${message}`, context || '');
 
   // Uncomment when Sentry is installed:
@@ -82,9 +84,9 @@ export function captureMessage(
  */
 export function setUser(user: { id: string; email?: string } | null): void {
   if (user) {
-    console.log('Error tracking: User set', { id: user.id });
+    log.debug('User set', { id: user.id });
   } else {
-    console.log('Error tracking: User cleared');
+    log.debug('User cleared');
   }
 
   // Uncomment when Sentry is installed:
@@ -100,7 +102,7 @@ export function addBreadcrumb(
   data?: Record<string, unknown>
 ): void {
   if (!IS_PRODUCTION) {
-    console.debug(`[Breadcrumb:${category}] ${message}`, data || '');
+    log.debug(`[Breadcrumb:${category}] ${message}`, data || '');
   }
 
   // Uncomment when Sentry is installed:

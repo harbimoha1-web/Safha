@@ -21,6 +21,9 @@ import { ActionSheet, ActionSheetOption } from '@/components/ActionSheet';
 import { TopicFallback } from './TopicFallback';
 import { VideoPlayer } from './VideoPlayer';
 import { getOptimizedImageUrl, getBlurredImageUrl } from '@/lib/image';
+import { createLogger } from '@/lib/debug';
+
+const log = createLogger('StoryCard');
 
 const { width, height } = Dimensions.get('window');
 
@@ -90,16 +93,16 @@ export const StoryCard = memo(function StoryCard({ story, isActive, language, is
   const handleImageError = useCallback(() => {
     if (!useOriginalUrl && story.image_url && !useSourceLogo) {
       // Step 1: Try original URL if optimized URL failed
-      console.log('[StoryCard] Optimized image failed, trying original');
+      log.debug('[StoryCard] Optimized image failed, trying original');
       setUseOriginalUrl(true);
     } else if (!useSourceLogo && sourceLogoUrl) {
       // Step 2: Try source logo if original URL failed
-      console.log('[StoryCard] Original image failed, trying source logo');
+      log.debug('[StoryCard] Original image failed, trying source logo');
       setUseSourceLogo(true);
       setUseOriginalUrl(false); // Reset to use optimized logo first
     } else {
       // Step 3: All options exhausted, show TopicFallback
-      console.log('[StoryCard] All image options failed, showing TopicFallback');
+      log.debug('[StoryCard] All image options failed, showing TopicFallback');
       setImageError(true);
     }
   }, [useOriginalUrl, useSourceLogo, story.image_url, sourceLogoUrl]);
@@ -121,7 +124,7 @@ export const StoryCard = memo(function StoryCard({ story, isActive, language, is
         onShare?.(story.id);
       }
     } catch (error) {
-      console.error('Share error:', error);
+      log.error('Share error:', error);
     }
   }, [title, summary, story.original_url, story.id, onShare]);
 
@@ -193,7 +196,12 @@ export const StoryCard = memo(function StoryCard({ story, isActive, language, is
               </Text>
               {/* AI Summary - Clickable */}
               {summary && (
-                <TouchableOpacity onPress={() => setShowSummaryModal(true)} activeOpacity={0.7}>
+                <TouchableOpacity
+                  onPress={() => setShowSummaryModal(true)}
+                  activeOpacity={0.7}
+                  accessibilityRole="button"
+                  accessibilityLabel={isArabic ? 'عرض الملخص الكامل' : 'View full summary'}
+                >
                   <LinearGradient
                     colors={['rgba(20,10,30,0.85)', 'rgba(30,15,45,0.80)']}
                     start={{ x: 0, y: 0 }}
@@ -252,6 +260,8 @@ export const StoryCard = memo(function StoryCard({ story, isActive, language, is
                 onPress={handleSave}
                 activeOpacity={0.7}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                accessibilityRole="button"
+                accessibilityLabel={isSaved ? (isArabic ? 'إزالة الإشارة المرجعية' : 'Remove bookmark') : (isArabic ? 'حفظ الخبر' : 'Save story')}
               >
                 <FontAwesome name={isSaved ? "bookmark" : "bookmark-o"} size={28} color="#fff" />
                 <Text style={styles.actionCount}>{formatCount(story.save_count)}</Text>
@@ -261,6 +271,8 @@ export const StoryCard = memo(function StoryCard({ story, isActive, language, is
                 onPress={handleShare}
                 activeOpacity={0.7}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                accessibilityRole="button"
+                accessibilityLabel={isArabic ? 'مشاركة الخبر' : 'Share story'}
               >
                 <FontAwesome name="share" size={28} color="#fff" />
                 <Text style={styles.actionCount}>{formatCount(story.share_count)}</Text>
@@ -270,6 +282,8 @@ export const StoryCard = memo(function StoryCard({ story, isActive, language, is
                 onPress={handleOpenMenu}
                 activeOpacity={0.7}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                accessibilityRole="button"
+                accessibilityLabel={isArabic ? 'المزيد من الخيارات' : 'More options'}
               >
                 <FontAwesome name="ellipsis-v" size={24} color="#fff" />
               </TouchableOpacity>
@@ -338,7 +352,12 @@ export const StoryCard = memo(function StoryCard({ story, isActive, language, is
 
             {/* AI Summary - Clickable */}
             {summary && (
-              <TouchableOpacity onPress={() => setShowSummaryModal(true)} activeOpacity={0.7}>
+              <TouchableOpacity
+                onPress={() => setShowSummaryModal(true)}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel={isArabic ? 'عرض الملخص الكامل' : 'View full summary'}
+              >
                 <LinearGradient
                   colors={['rgba(20,10,30,0.85)', 'rgba(30,15,45,0.80)']}
                   start={{ x: 0, y: 0 }}
@@ -458,7 +477,12 @@ export const StoryCard = memo(function StoryCard({ story, isActive, language, is
 
               {/* AI Summary - Clickable */}
               {summary && (
-                <TouchableOpacity onPress={() => setShowSummaryModal(true)} activeOpacity={0.7}>
+                <TouchableOpacity
+                  onPress={() => setShowSummaryModal(true)}
+                  activeOpacity={0.7}
+                  accessibilityRole="button"
+                  accessibilityLabel={isArabic ? 'عرض الملخص الكامل' : 'View full summary'}
+                >
                   <LinearGradient
                     colors={['rgba(20,10,30,0.85)', 'rgba(30,15,45,0.80)']}
                     start={{ x: 0, y: 0 }}
@@ -568,6 +592,8 @@ export const StoryCard = memo(function StoryCard({ story, isActive, language, is
           style={styles.modalOverlay}
           activeOpacity={1}
           onPress={() => setShowSummaryModal(false)}
+          accessibilityRole="button"
+          accessibilityLabel={isArabic ? 'إغلاق النافذة' : 'Close modal'}
         >
           <View style={styles.summaryModalContainer}>
             <LinearGradient
@@ -588,6 +614,8 @@ export const StoryCard = memo(function StoryCard({ story, isActive, language, is
                   onPress={() => setShowSummaryModal(false)}
                   style={styles.closeButton}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  accessibilityRole="button"
+                  accessibilityLabel={isArabic ? 'إغلاق' : 'Close'}
                 >
                   <FontAwesome name="times" size={20} color="rgba(255,255,255,0.8)" />
                 </TouchableOpacity>

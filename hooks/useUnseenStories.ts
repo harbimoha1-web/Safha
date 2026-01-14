@@ -4,6 +4,9 @@ import { getUnseenStories } from '@/lib/api';
 import { PAGE_SIZE, STALE_TIME } from '@/constants/config';
 import { useBlockedSourceIds } from './useBlockedSources';
 import { useAppStore, useAuthStore } from '@/stores';
+import { createLogger } from '@/lib/debug';
+
+const log = createLogger('UnseenStories');
 
 /**
  * Fetch stories the user hasn't seen (no repeats)
@@ -23,9 +26,9 @@ export function useUnseenStories(topicIds?: string[]) {
   const query = useInfiniteQuery({
     queryKey: ['unseenStories', user?.id, topicIds, blockedSourceIds, settings.contentLanguage],
     queryFn: async ({ pageParam = 0 }) => {
-      console.log('[useUnseenStories] queryFn called, user:', user?.id, 'topicIds:', topicIds, 'contentLanguage:', settings.contentLanguage);
+      log.debug('queryFn called, user:', user?.id, 'topicIds:', topicIds, 'contentLanguage:', settings.contentLanguage);
       if (!user) {
-        console.log('[useUnseenStories] No user, returning empty');
+        log.debug('No user, returning empty');
         return [];
       }
 
@@ -38,12 +41,12 @@ export function useUnseenStories(topicIds?: string[]) {
         settings.contentLanguage
       );
 
-      console.log('[useUnseenStories] Got', stories.length, 'stories from API');
+      log.debug('Got', stories.length, 'stories from API');
 
       // Filter out stories marked as seen in current session
       // (provides immediate feedback before next refetch)
       const filtered = stories.filter((s) => !sessionSeenRef.current.has(s.id));
-      console.log('[useUnseenStories] After session filter:', filtered.length);
+      log.debug('After session filter:', filtered.length);
       return filtered;
     },
     getNextPageParam: (lastPage, allPages) => {

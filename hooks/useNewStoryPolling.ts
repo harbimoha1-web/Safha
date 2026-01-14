@@ -2,6 +2,9 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getNewStoryCount } from '@/lib/api';
 import { useAuthStore } from '@/stores';
+import { createLogger } from '@/lib/debug';
+
+const log = createLogger('NewStoryPolling');
 
 // Poll interval: 2 minutes
 const POLL_INTERVAL = 2 * 60 * 1000;
@@ -35,7 +38,7 @@ export function useNewStoryPolling(topicIds?: string[]) {
 
   // Log polling errors for debugging
   if (isError && error) {
-    console.warn('[useNewStoryPolling] Polling error:', error);
+    log.warn('Polling error:', error);
   }
 
   // Update count when data changes

@@ -20,6 +20,9 @@ import { updateProfile } from '@/lib/api';
 import { useBlockedSources, useUnblockSource } from '@/hooks';
 import type { NotificationPreferences } from '@/types';
 import { colors as staticColors, spacing, borderRadius, fontSize, fontWeight } from '@/constants';
+import { createLogger } from '@/lib/debug';
+
+const log = createLogger('Profile');
 import { useTheme } from '@/contexts/ThemeContext';
 
 export default function ProfileScreen() {
@@ -72,7 +75,7 @@ export default function ProfileScreen() {
       });
       setProfile(updatedProfile);
     } catch (error) {
-      console.error('Failed to save notification preferences:', error);
+      log.error('Failed to save notification preferences:', error);
     }
   }, [user, setProfile]);
 

@@ -19,6 +19,9 @@ import { getStoryById, recordInteraction, saveStory, unsaveStory, isStorySaved, 
 import { getOptimizedImageUrl } from '@/lib/image';
 import { spacing, borderRadius, fontSize, fontWeight, fontFamily } from '@/constants/theme';
 import type { Story } from '@/types';
+import { createLogger } from '@/lib/debug';
+
+const log = createLogger('Story');
 
 export default function StoryDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -55,7 +58,7 @@ export default function StoryDetailScreen() {
       if (user && data) {
         const saved = await isStorySaved(user.id, id);
         setIsSaved(saved);
-        recordInteraction(user.id, id, 'view').catch(() => {});
+        recordInteraction(user.id, id, 'view').catch(log.debug);
       }
     } catch (err) {
       setError(isArabic ? 'فشل في تحميل الخبر' : 'Failed to load story');
@@ -97,7 +100,7 @@ export default function StoryDetailScreen() {
         setContentFetchFailed(true);
       }
     } catch (err) {
-      console.error('Failed to fetch content on-demand:', err);
+      log.error('Failed to fetch content on-demand:', err);
       setContentFetchFailed(true);
     } finally {
       setIsLoadingContent(false);
@@ -134,10 +137,10 @@ export default function StoryDetailScreen() {
         url: story.original_url,
       });
       if (result.action === Share.sharedAction && user && id) {
-        recordInteraction(user.id, id, 'share').catch(console.error);
+        recordInteraction(user.id, id, 'share').catch(log.error);
       }
     } catch (error) {
-      console.error('Share error:', error);
+      log.error('Share error:', error);
     }
   }, [story, isArabic, user, id]);
 

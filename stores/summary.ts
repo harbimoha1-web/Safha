@@ -3,6 +3,9 @@
 
 import { create } from 'zustand';
 import type { Story } from '@/types';
+import { createLogger } from '@/lib/debug';
+
+const log = createLogger('SummaryStore');
 
 interface TopicSection {
   topic: string;
@@ -145,7 +148,7 @@ export const useSummaryStore = create<SummaryState>((set) => ({
 
       set({ summary, isLoading: false });
     } catch (error) {
-      console.error('Summary generation error:', error);
+      log.error('Summary generation error:', error);
       set({
         error:
           language === 'ar'

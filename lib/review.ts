@@ -5,6 +5,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as StoreReview from 'expo-store-review';
 import { Platform } from 'react-native';
+import { createLogger } from './debug';
+
+const log = createLogger('Review');
 
 const REVIEW_STORAGE_KEY = '@safha_review_state';
 
@@ -81,7 +84,7 @@ async function getReviewState(): Promise<ReviewState> {
       return { ...DEFAULT_STATE, ...JSON.parse(stored) };
     }
   } catch (error) {
-    console.error('Error reading review state:', error);
+    log.error('Error reading review state:', error);
   }
   return { ...DEFAULT_STATE };
 }
@@ -93,7 +96,7 @@ async function saveReviewState(state: ReviewState): Promise<void> {
   try {
     await AsyncStorage.setItem(REVIEW_STORAGE_KEY, JSON.stringify(state));
   } catch (error) {
-    console.error('Error saving review state:', error);
+    log.error('Error saving review state:', error);
   }
 }
 
@@ -234,7 +237,7 @@ export async function requestStoreReview(): Promise<boolean> {
     }
     return false;
   } catch (error) {
-    console.error('Error requesting store review:', error);
+    log.error('Error requesting store review:', error);
     return false;
   }
 }
@@ -258,7 +261,7 @@ export async function openStorePage(): Promise<void> {
     // This will open the App Store / Play Store page for the app
     await StoreReview.requestReview();
   } catch (error) {
-    console.error('Error opening store page:', error);
+    log.error('Error opening store page:', error);
   }
 }
 

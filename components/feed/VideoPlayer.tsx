@@ -3,6 +3,9 @@ import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
 import { View, StyleSheet, TouchableOpacity, Dimensions, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppStore } from '@/stores/app';
+import { createLogger } from '@/lib/debug';
+
+const log = createLogger('VideoPlayer');
 
 const { width, height } = Dimensions.get('window');
 
@@ -65,7 +68,7 @@ export function VideoPlayer({ uri, poster, isActive }: VideoPlayerProps) {
         }
       }
     } catch (error) {
-      console.error('Video playback toggle error:', error);
+      log.error('Video playback toggle error:', error);
     }
   }, []);
 

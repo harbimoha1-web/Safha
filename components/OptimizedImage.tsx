@@ -115,10 +115,10 @@ export function OptimizedImageBackground({
 
   const handleError = useCallback(() => {
     if (!useOriginalUrl && url) {
-      console.warn('[ImageBg] Optimized URL failed, trying original:', url?.substring(0, 80));
+      log.debug('ImageBg optimized URL failed, trying original:', url?.substring(0, 80));
       setUseOriginalUrl(true);
     } else {
-      console.warn('[ImageBg] Both URLs failed, showing fallback:', url?.substring(0, 80));
+      log.debug('ImageBg both URLs failed, showing fallback:', url?.substring(0, 80));
       setHasError(true);
     }
   }, [useOriginalUrl, url]);

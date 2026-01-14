@@ -1,6 +1,10 @@
 // Moyasar Payment Integration
 // Saudi payment gateway supporting mada, Visa, Mastercard, Apple Pay, STC Pay
 
+import { createLogger } from '../debug';
+
+const log = createLogger('Moyasar');
+
 interface MoyasarConfig {
   apiKey: string;
   publishableKey: string;
@@ -241,7 +245,7 @@ export async function verifyWebhookSignature(
   secret: string
 ): Promise<boolean> {
   if (!payload || !signature || !secret) {
-    console.error('Webhook verification failed: Missing required parameters');
+    log.error('Webhook verification failed: Missing required parameters');
     return false;
   }
 
@@ -260,7 +264,7 @@ export async function verifyWebhookSignature(
 
     return result === 0;
   } catch (error) {
-    console.error('Webhook signature verification error:', error);
+    log.error('Webhook signature verification error:', error);
     return false;
   }
 }

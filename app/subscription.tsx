@@ -18,6 +18,9 @@ import { router, useLocalSearchParams } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useAppStore, useSubscriptionStore, useAuthStore } from '@/stores';
 import { SUBSCRIPTION_PLANS, type PlanType } from '@/lib/payments/moyasar';
+import { createLogger } from '@/lib/debug';
+
+const log = createLogger('Subscription');
 import { HapticFeedback } from '@/lib/haptics';
 import { useTheme } from '@/contexts/ThemeContext';
 import { premiumColors, spacing, borderRadius, fontSize, fontWeight } from '@/constants';
@@ -136,7 +139,7 @@ export default function SubscriptionScreen() {
         setShowCelebration(true);
       }
     } catch (error) {
-      console.error('Subscription error:', error);
+      log.error('Subscription error:', error);
       Alert.alert(
         isArabic ? 'خطأ' : 'Error',
         isArabic ? 'حدث خطأ أثناء الاشتراك. حاول مرة أخرى.' : 'An error occurred. Please try again.'
@@ -197,7 +200,7 @@ export default function SubscriptionScreen() {
         setShowCelebration(true);
       }
     } catch (error) {
-      console.error('Subscription error:', error);
+      log.error('Subscription error:', error);
       Alert.alert(
         isArabic ? 'خطأ' : 'Error',
         isArabic

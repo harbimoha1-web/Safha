@@ -25,6 +25,9 @@ import { useStories, useUnseenStories, useNewStoryPolling, useSavedStories, useS
 import { useTheme } from '@/contexts/ThemeContext';
 import { PREFETCH_THRESHOLD, colors as defaultColors, spacing, borderRadius, fontSize, fontWeight } from '@/constants';
 import { getOptimizedImageUrl } from '@/lib/image';
+import { createLogger } from '@/lib/debug';
+
+const log = createLogger('Feed');
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -123,7 +126,7 @@ export default function FeedScreen() {
   // Flatten paginated data into a single array
   const stories = useMemo(() => {
     const flat = data?.pages.flat() ?? [];
-    console.log('[feed] Stories flattened:', flat.length, 'isLoading:', isLoading, 'isError:', isError, 'error:', error?.message);
+    log.debug('[feed] Stories flattened:', flat.length, 'isLoading:', isLoading, 'isError:', isError, 'error:', error?.message);
     return flat;
   }, [data, isLoading, isError, error]);
 
@@ -178,7 +181,7 @@ export default function FeedScreen() {
   const handleShareStory = useCallback(
     (storyId: string) => {
       if (user) {
-        recordInteraction(user.id, storyId, 'share').catch(console.error);
+        recordInteraction(user.id, storyId, 'share').catch(log.error);
       }
     },
     [user]
@@ -230,7 +233,7 @@ export default function FeedScreen() {
 
         if (user) {
           // Logged-in user: record to server
-          recordInteraction(user.id, skippedStory.id, 'skip').catch(console.error);
+          recordInteraction(user.id, skippedStory.id, 'skip').catch(log.error);
           // Mark as seen in current session (immediate hide on next refresh)
           if (markAsSeen) {
             markAsSeen(skippedStory.id);
