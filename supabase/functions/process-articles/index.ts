@@ -295,7 +295,19 @@ async function processArticle(
       console.warn(`[${article.original_title?.slice(0, 30)}] Unknown topic slugs: ${missingSlugs.join(', ')}`);
     }
 
-    let topicIds = topicsData?.map((t: { id: string }) => t.id) || [];
+    // Get AI-generated topic IDs
+    const aiTopicIds = topicsData?.map((t: { id: string }) => t.id) || [];
+
+    // Get RSS source topic IDs (inherited from rss_sources.topic_ids via fetch-rss)
+    const rssTopicIds: string[] = article.topic_ids || [];
+
+    // Merge topics: RSS source topics take priority (they're curated), then AI topics
+    // Using Set to deduplicate
+    let topicIds = [...new Set([...rssTopicIds, ...aiTopicIds])];
+
+    if (rssTopicIds.length > 0) {
+      console.log(`[${article.original_title?.slice(0, 30)}] Using RSS topics: ${rssTopicIds.length}, AI topics: ${aiTopicIds.length}, merged: ${topicIds.length}`);
+    }
 
     // If no topics found, assign default 'general' topic so stories are discoverable
     if (topicIds.length === 0) {

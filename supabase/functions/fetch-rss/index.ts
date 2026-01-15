@@ -924,11 +924,12 @@ async function fetchRSSSource(
 
       if (existingByHash && existingByHash.length > 0) continue;
 
-      // Insert new article
+      // Insert new article with topic_ids from RSS source
       const { error: insertError } = await supabase
         .from('raw_articles')
         .insert({
           rss_source_id: source.id,
+          topic_ids: source.topic_ids || [],  // Inherit topics from RSS source
           guid,
           original_url: url,
           original_title: title,
