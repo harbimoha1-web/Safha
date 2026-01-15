@@ -10,6 +10,7 @@ beforeEach(() => {
       textSize: 'medium',
       autoPlayVideos: true,
       newsFrequency: null,
+      contentLanguage: 'all',
     },
     selectedTopics: [],
     availableTopics: [],

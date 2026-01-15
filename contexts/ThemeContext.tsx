@@ -4,6 +4,9 @@ import { useAppStore } from '@/stores';
 import { colors, lightColors, premiumColors, lightPremiumColors } from '@/constants';
 import type { Theme } from '@/types';
 
+// Export ThemeColors type for components that need it
+export type ThemeColors = typeof colors;
+
 type ColorScheme = 'light' | 'dark';
 
 interface ThemeContextValue {

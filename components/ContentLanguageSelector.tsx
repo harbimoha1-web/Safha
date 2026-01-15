@@ -87,7 +87,7 @@ export function ContentLanguageSelector({ isArabic }: ContentLanguageSelectorPro
   const { colors } = useTheme();
   const { settings, setContentLanguage } = useAppStore();
 
-  const options: { key: ContentLanguage; icon: string; labelEn: string; labelAr: string }[] = [
+  const options: { key: ContentLanguage; icon: IconName; labelEn: string; labelAr: string }[] = [
     { key: 'all', icon: 'globe', labelEn: 'All', labelAr: 'الكل' },
     { key: 'ar', icon: 'font', labelEn: 'عربي', labelAr: 'عربي' },
     { key: 'en', icon: 'language', labelEn: 'EN', labelAr: 'EN' },

@@ -19,7 +19,12 @@ jest.mock('@/hooks/useBlockedSources', () => ({
 }));
 
 jest.mock('@/stores', () => ({
-  useAppStore: jest.fn(() => ({ deselectedSources: [] })),
+  useAppStore: jest.fn(() => ({
+    deselectedSources: [],
+    settings: { contentLanguage: 'all' },
+    localHistory: [],
+  })),
+  useAuthStore: jest.fn(() => ({ user: null })),
 }));
 
 import { getStories, getStoriesByTopic } from '@/lib/api';
@@ -80,7 +85,11 @@ describe('useStories', () => {
     jest.clearAllMocks();
     (getStories as jest.Mock).mockResolvedValue(mockStories);
     (useBlockedSourceIds as jest.Mock).mockReturnValue({ data: [] });
-    (useAppStore as unknown as jest.Mock).mockReturnValue({ deselectedSources: [] });
+    (useAppStore as unknown as jest.Mock).mockReturnValue({
+      deselectedSources: [],
+      settings: { contentLanguage: 'all' },
+      localHistory: [],
+    });
   });
 
   it('should fetch stories on mount', async () => {
@@ -105,7 +114,8 @@ describe('useStories', () => {
       expect.any(Number), // PAGE_SIZE
       0, // initial offset
       topicIds,
-      [] // excluded sources
+      [], // excluded sources
+      'all' // contentLanguage
     );
   });
 
@@ -122,36 +132,43 @@ describe('useStories', () => {
       expect.any(Number),
       0,
       undefined,
-      blockedIds
+      blockedIds,
+      'all' // contentLanguage
     );
   });
 
-  it('should combine blocked and deselected sources', async () => {
+  it('should use blocked sources from API', async () => {
     const blockedIds = ['blocked1'];
-    const deselectedIds = ['deselected1'];
     (useBlockedSourceIds as jest.Mock).mockReturnValue({ data: blockedIds });
-    (useAppStore as unknown as jest.Mock).mockReturnValue({ deselectedSources: deselectedIds });
+    (useAppStore as unknown as jest.Mock).mockReturnValue({
+      deselectedSources: [],
+      settings: { contentLanguage: 'all' },
+      localHistory: [],
+    });
 
     const wrapper = createWrapper();
     const { result } = renderHook(() => useStories(), { wrapper });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-    // Should have both blocked and deselected sources
+    // Should pass blocked sources to API
     expect(getStories).toHaveBeenCalledWith(
       expect.any(Number),
       0,
       undefined,
-      expect.arrayContaining(['blocked1', 'deselected1'])
+      blockedIds,
+      'all' // contentLanguage
     );
   });
 
-  it('should deduplicate excluded source IDs', async () => {
-    // Same ID in both blocked and deselected
+  it('should pass multiple blocked sources to API', async () => {
     const blockedIds = ['source1', 'source2'];
-    const deselectedIds = ['source1', 'source3'];
     (useBlockedSourceIds as jest.Mock).mockReturnValue({ data: blockedIds });
-    (useAppStore as unknown as jest.Mock).mockReturnValue({ deselectedSources: deselectedIds });
+    (useAppStore as unknown as jest.Mock).mockReturnValue({
+      deselectedSources: [],
+      settings: { contentLanguage: 'all' },
+      localHistory: [],
+    });
 
     const wrapper = createWrapper();
     const { result } = renderHook(() => useStories(), { wrapper });
@@ -161,9 +178,9 @@ describe('useStories', () => {
     const callArgs = (getStories as jest.Mock).mock.calls[0];
     const excludedSources = callArgs[3];
 
-    // Should have unique IDs only
-    expect(excludedSources).toHaveLength(3);
-    expect(new Set(excludedSources).size).toBe(3);
+    // Should pass the blocked IDs as-is
+    expect(excludedSources).toHaveLength(2);
+    expect(excludedSources).toEqual(blockedIds);
   });
 
   it('should handle fetch errors', async () => {
@@ -189,7 +206,8 @@ describe('useStories', () => {
       expect.any(Number),
       0,
       undefined,
-      expect.any(Array)
+      expect.any(Array),
+      'all' // contentLanguage
     );
   });
 });

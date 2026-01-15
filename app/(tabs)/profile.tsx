@@ -54,7 +54,7 @@ export default function ProfileScreen() {
   const [notifSettings, setNotifSettings] = useState<NotificationPreferences>(defaultNotifPrefs);
   const [streakReminder, setStreakReminder] = useState(true); // Local only for now
   const isInitialLoad = useRef(true);
-  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isArabic = settings.language === 'ar';
 
@@ -619,7 +619,7 @@ export default function ProfileScreen() {
       </View>
 
       {/* Admin Section - Only visible to admins/moderators */}
-      {isAuthenticated && isAdminOrModerator && (
+      {isAuthenticated && isAdminOrModerator() && (
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.textSecondary }, isArabic && styles.arabicText]}>
             {isArabic ? 'الإدارة' : 'Admin'}

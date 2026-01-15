@@ -98,6 +98,7 @@ describe('getStories', () => {
   it('should fetch stories with default parameters', async () => {
     const mockQuery = {
       select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
       order: jest.fn().mockReturnThis(),
       overlaps: jest.fn().mockReturnThis(),
       not: jest.fn().mockReturnThis(),
@@ -108,6 +109,7 @@ describe('getStories', () => {
     const result = await getStories();
 
     expect(supabase.from).toHaveBeenCalledWith('stories');
+    expect(mockQuery.eq).toHaveBeenCalledWith('is_approved', true);
     expect(mockQuery.order).toHaveBeenCalledWith('published_at', { ascending: false });
     expect(mockQuery.range).toHaveBeenCalledWith(0, 19);
     expect(result).toEqual([mockStory]);
@@ -116,6 +118,7 @@ describe('getStories', () => {
   it('should filter by topicIds when provided', async () => {
     const mockQuery = {
       select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
       order: jest.fn().mockReturnThis(),
       overlaps: jest.fn().mockReturnThis(),
       not: jest.fn().mockReturnThis(),
@@ -131,6 +134,7 @@ describe('getStories', () => {
   it('should filter out blocked sources when provided', async () => {
     const mockQuery = {
       select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
       order: jest.fn().mockReturnThis(),
       overlaps: jest.fn().mockReturnThis(),
       not: jest.fn().mockReturnThis(),
@@ -146,6 +150,7 @@ describe('getStories', () => {
   it('should throw APIError on database error', async () => {
     const mockQuery = {
       select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
       order: jest.fn().mockReturnThis(),
       range: jest.fn().mockResolvedValue({ data: null, error: { message: 'DB Error', code: 'PGRST500' } }),
     };
@@ -157,6 +162,7 @@ describe('getStories', () => {
   it('should return empty array when no data', async () => {
     const mockQuery = {
       select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
       order: jest.fn().mockReturnThis(),
       range: jest.fn().mockResolvedValue({ data: null, error: null }),
     };
@@ -445,11 +451,17 @@ describe('Interactions API', () => {
 
       await expect(recordInteraction(validUUID, validUUID2, 'view')).resolves.not.toThrow();
       expect(supabase.from).toHaveBeenCalledWith('user_story_interactions');
-      expect(mockQuery.upsert).toHaveBeenCalledWith({
-        user_id: validUUID,
-        story_id: validUUID2,
-        interaction_type: 'view',
-      });
+      expect(mockQuery.upsert).toHaveBeenCalledWith(
+        {
+          user_id: validUUID,
+          story_id: validUUID2,
+          interaction_type: 'view',
+        },
+        {
+          onConflict: 'user_id,story_id,interaction_type',
+          ignoreDuplicates: true,
+        }
+      );
     });
 
     it('should reject invalid interaction type', async () => {

@@ -37,10 +37,10 @@ import {
 
 // Value stack items
 const VALUE_ITEMS = [
-  { icon: 'magic', textEn: 'All your interests, summarized daily', textAr: 'كل اهتماماتك، ملخصة يومياً', value: 20 },
-  { icon: 'shield', textEn: 'Trusted sources only, no noise', textAr: 'مصادر موثوقة فقط، بدون ضوضاء', value: 10 },
-  { icon: 'ban', textEn: 'Zero ads. Pure content.', textAr: 'بدون إعلانات. محتوى فقط.', value: 10 },
-  { icon: 'bolt', textEn: 'AI curates what matters to you', textAr: 'الذكاء الاصطناعي ينظم ما يهمك', value: 10 },
+  { icon: 'magic' as const, textEn: 'All your interests, summarized daily', textAr: 'كل اهتماماتك، ملخصة يومياً', value: 20 },
+  { icon: 'shield' as const, textEn: 'Trusted sources only, no noise', textAr: 'مصادر موثوقة فقط، بدون ضوضاء', value: 10 },
+  { icon: 'ban' as const, textEn: 'Zero ads. Pure content.', textAr: 'بدون إعلانات. محتوى فقط.', value: 10 },
+  { icon: 'bolt' as const, textEn: 'AI curates what matters to you', textAr: 'الذكاء الاصطناعي ينظم ما يهمك', value: 10 },
 ];
 
 export default function SubscriptionScreen() {

@@ -119,6 +119,7 @@ export interface Story {
   source?: Source;
   original_url: string;
   original_title: string | null;
+  original_description: string | null;
   title_ar: string | null;
   title_en: string | null;
   summary_ar: string | null;

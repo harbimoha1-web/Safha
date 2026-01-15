@@ -31,7 +31,7 @@ export default function SavedScreen() {
 
   // Track recently deleted item for undo
   const [deletedItem, setDeletedItem] = useState<SavedStory | null>(null);
-  const undoTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const undoTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const UNDO_DURATION = 4000; // 4 seconds to undo
 
   const onRefresh = useCallback(() => {

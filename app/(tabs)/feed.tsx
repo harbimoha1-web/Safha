@@ -103,8 +103,10 @@ export default function FeedScreen() {
   const unseenQuery = useUnseenStories(topicIds);
   const regularQuery = useStories(topicIds);
 
-  // Select which query to use based on auth state
-  const activeQuery = user ? unseenQuery : regularQuery;
+  // Select which query to use based on auth state and feed mode
+  // - Interests mode (For You): unseen stories only (no repeats)
+  // - Explore mode: all stories (can rediscover content)
+  const activeQuery = (user && feedMode === 'interests') ? unseenQuery : regularQuery;
   const {
     data,
     isLoading,
@@ -489,16 +491,24 @@ export default function FeedScreen() {
       {/* Content - Either Empty State OR PagerView */}
       {stories.length === 0 ? (
         <View style={styles.emptyStateContainer}>
-          <FontAwesome name={user ? 'check-circle' : 'inbox'} size={48} color={user ? colors.primary : colors.textMuted} />
+          <FontAwesome
+            name={user ? 'check-circle' : (feedMode === 'explore' ? 'compass' : 'inbox')}
+            size={48}
+            color={user ? colors.primary : colors.textMuted}
+          />
           <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
             {user
               ? (isArabic ? 'أنت على اطلاع بكل الأخبار!' : "You're all caught up!")
-              : (isArabic ? 'لا توجد أخبار لهذا الموضوع' : 'No stories for this topic')}
+              : feedMode === 'explore'
+                ? (isArabic ? 'لا توجد أخبار متاحة' : 'No stories available')
+                : (isArabic ? 'لا توجد أخبار لهذا الموضوع' : 'No stories for this topic')}
           </Text>
           <Text style={[styles.emptySubtext, { color: colors.textMuted }]}>
             {user
               ? (isArabic ? 'لقد قرأت جميع الأخبار المتاحة' : "You've read all available stories")
-              : (isArabic ? 'اختر موضوعاً آخر أو اضغط "الكل"' : 'Select another topic or tap "All"')}
+              : feedMode === 'explore'
+                ? (isArabic ? 'جرب لاحقاً أو تصفح اهتماماتك' : 'Try again later or browse your interests')
+                : (isArabic ? 'اختر موضوعاً آخر أو اضغط "الكل"' : 'Select another topic or tap "All"')}
           </Text>
           {user && (
             <TouchableOpacity

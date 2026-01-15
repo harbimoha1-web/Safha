@@ -91,7 +91,7 @@ interface OptimizedImageBackgroundProps extends Omit<ImageBackgroundProps, 'sour
   url: string | null | undefined;
   width?: number;
   height?: number;
-  fallbackIcon?: string;
+  fallbackIcon?: IconName;
   fallbackIconSize?: number;
 }
 
