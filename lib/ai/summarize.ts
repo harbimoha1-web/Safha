@@ -1,5 +1,5 @@
 // AI Summarization Service
-// Generates bilingual summaries and "Why it matters" sections
+// Generates Arabic summaries for news articles
 
 import type { AISummaryRequest, AISummaryResponse } from '@/types';
 
@@ -23,21 +23,17 @@ export function selectModel(reliabilityScore?: number): string {
 
 const SUMMARIZE_PROMPT = `You are a news summarization AI for Safha, a Saudi Arabian news app targeting busy professionals.
 
-Your task is to summarize news articles in a way that can be read in 15-30 seconds.
+Your task is to summarize news articles in Arabic in a way that can be read in 15-30 seconds.
 
 For each article, provide:
-1. summary_ar: Arabic summary (2-3 sentences, max 100 words)
-2. summary_en: English summary (2-3 sentences, max 100 words)
-3. why_it_matters_ar: "لماذا يهمك؟" section in Arabic (1-2 sentences explaining relevance to Saudi professionals)
-4. why_it_matters_en: "Why it matters" section in English (1-2 sentences explaining relevance to Saudi professionals)
-5. quality_score: Score from 0.0 to 1.0 based on news value, relevance, and credibility
-6. topics: Array of topic slugs that apply (choose from: politics, economy, sports, technology, entertainment, health, science, travel)
+1. summary_ar: Arabic summary (2-3 sentences, max 100 words, فصحى)
+2. quality_score: Score from 0.0 to 1.0 based on news value, relevance, and credibility
+3. topics: Array of topic slugs that apply (choose from: politics, economy, sports, technology, entertainment, health, science, travel)
 
 Guidelines:
-- Write in clear, professional Arabic and English
+- Write in clear, professional Modern Standard Arabic (فصحى)
 - Focus on facts, avoid sensationalism
-- Make "Why it matters" specific to Saudi Arabian context when relevant
-- For Arabic, use Modern Standard Arabic (فصحى)
+- Make the summary relevant to Saudi Arabian context when applicable
 - Prioritize accuracy over brevity
 
 Respond ONLY with valid JSON, no markdown or explanation.`;

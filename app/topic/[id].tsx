@@ -61,7 +61,8 @@ export default function TopicScreen() {
           style={[styles.storySummary, { color: colors.textSecondary }, isArabic && styles.arabicText]}
           numberOfLines={2}
         >
-          {isArabic ? item.summary_ar : item.summary_en}
+          {/* Always use Arabic summary (Arabic-only summarization) */}
+          {item.summary_ar}
         </Text>
         <Text style={[styles.storyMeta, { color: colors.textMuted }]}>
           {item.source?.name} • {new Date(item.published_at || item.created_at).toLocaleDateString()}

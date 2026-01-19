@@ -53,8 +53,8 @@ export async function getStories(
     .from('stories')
     .select(selectQuery)
     .eq('is_approved', true)  // Only show approved stories
-    .order('published_at', { ascending: false })
-    .order('created_at', { ascending: false });  // Secondary sort for consistent ordering
+    .order('published_at', { ascending: false })  // Newest published articles first (Jan 14 → Jan 13 → Jan 12)
+    .order('created_at', { ascending: false });  // Tiebreaker
 
   // Filter by source language if specified
   if (contentLanguage && contentLanguage !== 'all') {
@@ -314,6 +314,7 @@ export async function getStoriesByTopic(
     .from('stories')
     .select(STORY_SELECT)
     .contains('topic_ids', [validTopicId])
+    .order('created_at', { ascending: false })
     .order('published_at', { ascending: false })
     .limit(validLimit);
 
@@ -680,15 +681,16 @@ export async function searchStories(
 async function searchStoriesExact(query: string, limit: number): Promise<Story[]> {
   const escapedQuery = escapeSqlWildcards(query);
 
+  // Search by title (both languages for backwards compatibility) and Arabic summary only
   const { data, error } = await supabase
     .from('stories')
     .select(STORY_SELECT)
     .or(
       `title_ar.ilike.%${escapedQuery}%,` +
         `title_en.ilike.%${escapedQuery}%,` +
-        `summary_ar.ilike.%${escapedQuery}%,` +
-        `summary_en.ilike.%${escapedQuery}%`
+        `summary_ar.ilike.%${escapedQuery}%`
     )
+    .order('created_at', { ascending: false })
     .order('published_at', { ascending: false })
     .limit(limit);
 
@@ -708,6 +710,7 @@ export async function getDailySummaryStories(
   let query = supabase
     .from('stories')
     .select(STORY_SELECT)
+    .order('created_at', { ascending: false })
     .order('published_at', { ascending: false });
 
   // Filter by topics if provided
@@ -980,6 +983,41 @@ export interface SourceStoryCount {
   stories_this_week: number;
 }
 
+export interface ApiCostByModel {
+  model: string;
+  cost: number;
+  requests: number;
+  input_tokens: number;
+  output_tokens: number;
+}
+
+export interface ApiCostByFunction {
+  function_name: string;
+  cost: number;
+  requests: number;
+}
+
+export interface ApiCostDaily {
+  date: string;
+  cost: number;
+  requests: number;
+  input_tokens: number;
+  output_tokens: number;
+}
+
+export interface ApiCostSummary {
+  total_cost_usd: number;
+  total_input_tokens: number;
+  total_output_tokens: number;
+  total_requests: number;
+  avg_cost_per_request: number;
+  by_model: ApiCostByModel[];
+  by_function: ApiCostByFunction[];
+  daily_costs: ApiCostDaily[];
+  budget_usd: number;
+  days: number;
+}
+
 // Get admin dashboard stats
 export async function getAdminDashboardStats(): Promise<AdminDashboardStatsResponse> {
   const { data, error } = await supabase.rpc('get_admin_dashboard_stats');
@@ -1032,6 +1070,35 @@ export async function getEngagementTrends(days = 14): Promise<EngagementTrend[]>
     throw new APIError(`Failed to fetch engagement trends: ${error.message}`, 500, error.code);
   }
   return data || [];
+}
+
+// Get API cost summary for admin dashboard
+export async function getApiCostSummary(days = 30): Promise<ApiCostSummary> {
+  const { data, error } = await supabase.rpc('get_api_cost_summary', {
+    p_days: days,
+  });
+
+  if (error) {
+    throw new APIError(`Failed to fetch API costs: ${error.message}`, 500, error.code);
+  }
+
+  // Return default values if no data
+  if (!data) {
+    return {
+      total_cost_usd: 0,
+      total_input_tokens: 0,
+      total_output_tokens: 0,
+      total_requests: 0,
+      avg_cost_per_request: 0,
+      by_model: [],
+      by_function: [],
+      daily_costs: [],
+      budget_usd: 20,
+      days,
+    };
+  }
+
+  return data;
 }
 
 // Get all topics (including inactive) for admin
@@ -1088,6 +1155,112 @@ export async function getSourceStoryCounts(): Promise<SourceStoryCount[]> {
     throw new APIError(`Failed to fetch source story counts: ${error.message}`, 500, error.code);
   }
   return data || [];
+}
+
+// ============================================
+// PDPL COMPLIANCE API FUNCTIONS
+// ============================================
+
+// User data export structure
+export interface UserDataExport {
+  exportDate: string;
+  profile: Profile | null;
+  savedStories: SavedStory[];
+  notes: Note[];
+  readingHistory: { story_id: string; read_at: string }[];
+  blockedSources: BlockedSource[];
+  preferences: {
+    language: string;
+    theme: string;
+    notificationPreferences: unknown;
+  };
+}
+
+// Export all user data (PDPL Right to Access & Portability)
+export async function exportUserData(userId: string): Promise<UserDataExport> {
+  const validUserId = validateInput(UserIdSchema, userId);
+
+  // Fetch all user data in parallel
+  const [profile, savedStories, notes, interactions, blockedSources] = await Promise.all([
+    getProfile(validUserId),
+    getSavedStories(validUserId),
+    getNotes(validUserId).catch(() => []), // Notes may not exist for free users
+    supabase
+      .from('user_story_interactions')
+      .select('story_id, created_at')
+      .eq('user_id', validUserId)
+      .eq('interaction_type', 'view')
+      .order('created_at', { ascending: false }),
+    getBlockedSources(validUserId),
+  ]);
+
+  const readingHistory = (interactions.data || []).map(item => ({
+    story_id: item.story_id,
+    read_at: item.created_at,
+  }));
+
+  return {
+    exportDate: new Date().toISOString(),
+    profile,
+    savedStories,
+    notes,
+    readingHistory,
+    blockedSources,
+    preferences: {
+      language: profile?.notification_preferences ? 'stored_in_profile' : 'default',
+      theme: 'stored_locally',
+      notificationPreferences: profile?.notification_preferences || {},
+    },
+  };
+}
+
+// Delete user account and all data (PDPL Right to Deletion)
+export async function deleteUserAccount(userId: string): Promise<void> {
+  const validUserId = validateInput(UserIdSchema, userId);
+
+  // Delete all user data in order (respecting foreign key constraints)
+  // 1. Delete interactions
+  await supabase
+    .from('user_story_interactions')
+    .delete()
+    .eq('user_id', validUserId);
+
+  // 2. Delete saved stories
+  await supabase
+    .from('saved_stories')
+    .delete()
+    .eq('user_id', validUserId);
+
+  // 3. Delete notes
+  await supabase
+    .from('notes')
+    .delete()
+    .eq('user_id', validUserId);
+
+  // 4. Delete blocked sources
+  await supabase
+    .from('blocked_sources')
+    .delete()
+    .eq('user_id', validUserId);
+
+  // 5. Cancel any active subscription
+  await supabase
+    .from('subscriptions')
+    .update({ status: 'cancelled', cancel_at_period_end: true })
+    .eq('user_id', validUserId);
+
+  // 6. Delete profile (this cascades to auth.users via RLS)
+  const { error: profileError } = await supabase
+    .from('profiles')
+    .delete()
+    .eq('id', validUserId);
+
+  if (profileError) {
+    throw new APIError(`Failed to delete account: ${profileError.message}`, 500, profileError.code);
+  }
+
+  // Note: Auth user deletion is handled by Supabase Auth triggers or admin API
+  // The client should call signOut() after this
 }
 
 // Re-export validation utilities for use elsewhere

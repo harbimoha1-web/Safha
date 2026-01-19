@@ -157,9 +157,6 @@ export interface AISummaryRequest {
 
 export interface AISummaryResponse {
   summary_ar: string;
-  summary_en: string;
-  why_it_matters_ar: string;
-  why_it_matters_en: string;
   quality_score: number;
   topics: string[];
 }

@@ -1,4 +1,4 @@
-import React, { useCallback, useState, memo } from 'react';
+import React, { useCallback, useState, useEffect, useMemo, memo } from 'react';
 import {
   View,
   Text,
@@ -42,41 +42,54 @@ export const StoryCard = memo(function StoryCard({ story, isActive, language, is
   const { colors } = useTheme();
   const isArabic = language === 'ar';
   const title = (isArabic ? story.title_ar : story.title_en) || story.original_title;
-  const summary = isArabic ? story.summary_ar : story.summary_en;
+  // Always use Arabic summary (Arabic-only summarization)
+  const summary = story.summary_ar;
 
   // Get first ~150 chars of original content for preview
   const fullContent = story.full_content?.slice(0, 150)?.trim() || null;
 
   const [showActionSheet, setShowActionSheet] = useState(false);
   const [showSummaryModal, setShowSummaryModal] = useState(false);
-  const [imageError, setImageError] = useState(false);
-  const [imageLoaded, setImageLoaded] = useState(false);
-  const [useOriginalUrl, setUseOriginalUrl] = useState(false);
-  const [useSourceLogo, setUseSourceLogo] = useState(false);
 
-  // Get optimized image URL (uses screen dimensions and DPR automatically)
-  // Fallback chain: optimized (wsrv.nl) → original → source logo → TopicFallback
-  // Sharp image uses contain mode to show full image without cropping
-  const optimizedImageUrl = getOptimizedImageUrl(story.image_url, undefined, undefined, 'contain');
-  const blurredImageUrl = getBlurredImageUrl(story.image_url);
+  // PERF: Single state for image loading to prevent cascading re-renders
+  // States: loading -> optimized -> original -> logo -> fallback
+  type ImageState = 'loading' | 'optimized' | 'original' | 'logo' | 'fallback';
+  const [imageState, setImageState] = useState<ImageState>('loading');
+
+  // PERF: Reset image state when story changes (component reuse in PagerView)
+  useEffect(() => {
+    setImageState('loading');
+  }, [story.id]);
+
+  // PERF: Memoize URL calculations to avoid recalculating on every render
   const sourceLogoUrl = story.source?.logo_url;
-  const optimizedLogoUrl = sourceLogoUrl ? getOptimizedImageUrl(sourceLogoUrl, undefined, undefined, 'contain') : null;
+  const { optimizedImageUrl, blurredImageUrl, optimizedLogoUrl } = useMemo(() => ({
+    optimizedImageUrl: getOptimizedImageUrl(story.image_url, undefined, undefined, 'contain'),
+    blurredImageUrl: getBlurredImageUrl(story.image_url),
+    optimizedLogoUrl: sourceLogoUrl ? getOptimizedImageUrl(sourceLogoUrl, undefined, undefined, 'contain') : null,
+  }), [story.image_url, sourceLogoUrl]);
 
-  // Determine which image URL to display (sharp foreground)
-  let displayImageUrl: string | null = null;
-  if (useSourceLogo && optimizedLogoUrl) {
-    displayImageUrl = optimizedLogoUrl;
-  } else if (useOriginalUrl) {
-    displayImageUrl = story.image_url;
-  } else {
-    displayImageUrl = optimizedImageUrl;
-  }
+  // Determine which image URL to display based on state
+  const displayImageUrl = useMemo(() => {
+    switch (imageState) {
+      case 'loading':
+      case 'optimized':
+        return optimizedImageUrl;
+      case 'original':
+        return story.image_url;
+      case 'logo':
+        return optimizedLogoUrl;
+      default:
+        return null;
+    }
+  }, [imageState, optimizedImageUrl, story.image_url, optimizedLogoUrl]);
 
-  // Blurred background URL (always uses original story image)
-  const displayBlurredUrl = useSourceLogo ? null : blurredImageUrl;
+  // PERF: Only show blurred background while loading (not continuously)
+  const displayBlurredUrl = imageState === 'loading' ? blurredImageUrl : null;
 
   // Has valid image only if we have a URL to try AND haven't exhausted all options
-  const hasValidImage = displayImageUrl && !imageError;
+  const hasValidImage = displayImageUrl && imageState !== 'fallback';
+  const imageLoaded = imageState !== 'loading';
 
   // Check for video content (only MP4 supported)
   const hasVideo = !!story.video_url && story.video_type === 'mp4';
@@ -86,26 +99,32 @@ export const StoryCard = memo(function StoryCard({ story, isActive, language, is
 
   // Handle image load success
   const handleImageLoad = useCallback(() => {
-    setImageLoaded(true);
+    setImageState('optimized');
   }, []);
 
   // Handle image load error - fallback chain: optimized → original → source logo → TopicFallback
+  // PERF: Single state transition per error instead of multiple setState calls
   const handleImageError = useCallback(() => {
-    if (!useOriginalUrl && story.image_url && !useSourceLogo) {
-      // Step 1: Try original URL if optimized URL failed
-      log.debug('[StoryCard] Optimized image failed, trying original');
-      setUseOriginalUrl(true);
-    } else if (!useSourceLogo && sourceLogoUrl) {
-      // Step 2: Try source logo if original URL failed
-      log.debug('[StoryCard] Original image failed, trying source logo');
-      setUseSourceLogo(true);
-      setUseOriginalUrl(false); // Reset to use optimized logo first
-    } else {
+    setImageState(prev => {
+      if (prev === 'loading' || prev === 'optimized') {
+        // Step 1: Try original URL if optimized URL failed
+        if (story.image_url) {
+          log.debug('[StoryCard] Optimized image failed, trying original');
+          return 'original';
+        }
+      }
+      if (prev === 'original') {
+        // Step 2: Try source logo if original URL failed
+        if (sourceLogoUrl) {
+          log.debug('[StoryCard] Original image failed, trying source logo');
+          return 'logo';
+        }
+      }
       // Step 3: All options exhausted, show TopicFallback
       log.debug('[StoryCard] All image options failed, showing TopicFallback');
-      setImageError(true);
-    }
-  }, [useOriginalUrl, useSourceLogo, story.image_url, sourceLogoUrl]);
+      return 'fallback';
+    });
+  }, [story.image_url, sourceLogoUrl]);
 
   const handleSave = useCallback(() => {
     HapticFeedback.saveStory();
@@ -115,8 +134,13 @@ export const StoryCard = memo(function StoryCard({ story, isActive, language, is
   const handleShare = useCallback(async () => {
     HapticFeedback.shareStory();
     try {
+      // PERF: Calculate inside callback to avoid stale closure with memo()
+      const shareTitle = (isArabic ? story.title_ar : story.title_en) || story.original_title;
+      // Always use Arabic summary (Arabic-only summarization)
+      const shareSummary = story.summary_ar;
+
       const result = await Share.share({
-        message: `${title}\n\n${summary}\n\nRead more on Safha`,
+        message: `${shareTitle}\n\n${shareSummary}\n\nRead more on Safha`,
         url: story.original_url,
       });
       // Track share if user completed the share action
@@ -126,7 +150,7 @@ export const StoryCard = memo(function StoryCard({ story, isActive, language, is
     } catch (error) {
       log.error('Share error:', error);
     }
-  }, [title, summary, story.original_url, story.id, onShare]);
+  }, [story, isArabic, onShare]);
 
   const handleReadMore = useCallback(() => {
     HapticFeedback.buttonPress();

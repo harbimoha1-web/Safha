@@ -156,9 +156,6 @@ function calculateRetryAfter(retryCount: number): string {
 
 interface AISummaryResponse {
   summary_ar: string;
-  summary_en: string;
-  why_it_matters_ar: string;
-  why_it_matters_en: string;
   quality_score: number;
   topics: string[];
 }
@@ -174,15 +171,12 @@ const PRICING = {
 
 const SUMMARIZE_PROMPT = `You are a news summarization AI for Safha, a Saudi Arabian news app.
 
-Summarize news articles for busy professionals in 15-30 second reads.
+Summarize news articles in Arabic for busy professionals in 15-30 second reads.
 
 Provide:
 1. summary_ar: Arabic summary (2-3 sentences, max 100 words, فصحى)
-2. summary_en: English summary (2-3 sentences, max 100 words)
-3. why_it_matters_ar: "لماذا يهمك؟" (1-2 sentences, Saudi context)
-4. why_it_matters_en: "Why it matters" (1-2 sentences, Saudi context)
-5. quality_score: 0.0-1.0 (news value, relevance, credibility)
-6. topics: Array of slugs (politics, economy, sports, technology, entertainment, health, science, travel)
+2. quality_score: 0.0-1.0 (news value, relevance, credibility)
+3. topics: Array of slugs (politics, economy, sports, technology, entertainment, health, science, travel)
 
 Respond ONLY with valid JSON.`;
 
@@ -450,7 +444,7 @@ async function processArticle(
       return { success: true, story_id: existingStory.id, skipped: true };
     }
 
-    // Create story
+    // Create story (Arabic-only summaries)
     const { data: story, error: storyError } = await supabase
       .from('stories')
       .insert({
@@ -461,11 +455,8 @@ async function processArticle(
         title_ar: article.rss_source.language === 'ar' ? article.original_title : null,
         title_en: article.rss_source.language === 'en' ? article.original_title : null,
         summary_ar: summary.summary_ar,
-        summary_en: summary.summary_en,
         full_content: article.full_content,
         content_quality: article.content_quality || 0,
-        why_it_matters_ar: summary.why_it_matters_ar,
-        why_it_matters_en: summary.why_it_matters_en,
         ai_quality_score: summary.quality_score,
         image_url: article.image_url,
         video_url: article.video_url,

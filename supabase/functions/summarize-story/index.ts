@@ -1,5 +1,5 @@
 // Supabase Edge Function: Summarize Story
-// Uses Claude AI to generate summaries and "Why it matters" sections
+// Uses Claude AI to generate Arabic summaries
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.89.0';
@@ -38,30 +38,23 @@ interface SummarizeResult {
 
 interface AISummaryResponse {
   summary_ar: string;
-  summary_en: string;
-  why_it_matters_ar: string;
-  why_it_matters_en: string;
   quality_score: number;
   topics: string[];
 }
 
 const SUMMARIZE_PROMPT = `You are a news summarization AI for Safha, a Saudi Arabian news app targeting busy professionals.
 
-Your task is to summarize news articles in a way that can be read in 15-30 seconds.
+Your task is to summarize news articles in Arabic in a way that can be read in 15-30 seconds.
 
 For each article, provide:
-1. summary_ar: Arabic summary (2-3 sentences, max 100 words)
-2. summary_en: English summary (2-3 sentences, max 100 words)
-3. why_it_matters_ar: "لماذا يهمك؟" section in Arabic (1-2 sentences explaining relevance to Saudi professionals)
-4. why_it_matters_en: "Why it matters" section in English (1-2 sentences explaining relevance to Saudi professionals)
-5. quality_score: Score from 0.0 to 1.0 based on news value, relevance, and credibility
-6. topics: Array of topic slugs that apply (choose from: politics, economy, sports, technology, entertainment, health, science, travel)
+1. summary_ar: Arabic summary (2-3 sentences, max 100 words, فصحى)
+2. quality_score: Score from 0.0 to 1.0 based on news value, relevance, and credibility
+3. topics: Array of topic slugs that apply (choose from: politics, economy, sports, technology, entertainment, health, science, travel)
 
 Guidelines:
-- Write in clear, professional Arabic and English
+- Write in clear, professional Modern Standard Arabic (فصحى)
 - Focus on facts, avoid sensationalism
-- Make "Why it matters" specific to Saudi Arabian context when relevant
-- For Arabic, use Modern Standard Arabic (فصحى)
+- Make the summary relevant to Saudi Arabian context when applicable
 - Prioritize accuracy over brevity
 
 Respond ONLY with valid JSON, no markdown or explanation.`;
@@ -182,14 +175,11 @@ serve(async (req) => {
 
     const topicIds = topicsData?.map((t: { id: string }) => t.id) || [];
 
-    // Update story with AI-generated content
+    // Update story with AI-generated content (Arabic-only)
     const { data, error } = await supabase
       .from('stories')
       .update({
         summary_ar: summary.summary_ar,
-        summary_en: summary.summary_en,
-        why_it_matters_ar: summary.why_it_matters_ar,
-        why_it_matters_en: summary.why_it_matters_en,
         ai_quality_score: summary.quality_score,
         topic_ids: topicIds,
       })

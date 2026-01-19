@@ -174,8 +174,8 @@ export default function StoryDetailScreen() {
   }
 
   const title = (isArabic ? story.title_ar : story.title_en) || story.original_title;
-  const summary = isArabic ? story.summary_ar : story.summary_en;
-  const whyItMatters = isArabic ? story.why_it_matters_ar : story.why_it_matters_en;
+  // Always use Arabic summary (Arabic-only summarization)
+  const summary = story.summary_ar;
 
   // Use fetched content if available, otherwise use story's full_content
   const fullContent = fetchedContent || story.full_content;
