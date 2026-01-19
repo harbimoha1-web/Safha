@@ -17,20 +17,23 @@ interface SummarizeRequest {
   reliability_score?: number;
 }
 
-// Model tiers for cost optimization
-const MODELS = {
-  premium: 'claude-sonnet-4-20250514',  // Higher quality, higher cost
-  standard: 'claude-3-5-haiku-20241022', // Good quality, ~4x cheaper
-} as const;
+// Model configuration - Sonnet only for best quality
+const MODEL = 'claude-sonnet-4-20250514';
 
-/**
- * Select AI model based on source reliability score
- * - High reliability sources (>0.7) get Sonnet for best quality
- * - Standard sources get Haiku for cost efficiency
- */
-function selectModel(reliabilityScore?: number): string {
-  const score = reliabilityScore ?? 0.5;
-  return score > 0.7 ? MODELS.premium : MODELS.standard;
+// Sonnet pricing (per 1M tokens) for cost calculation
+const PRICING = {
+  input: 3.00,   // $3.00 per 1M input tokens
+  output: 15.00, // $15.00 per 1M output tokens
+};
+
+interface ClaudeUsage {
+  input_tokens: number;
+  output_tokens: number;
+}
+
+interface SummarizeResult {
+  summary: AISummaryResponse;
+  usage: ClaudeUsage;
 }
 
 interface AISummaryResponse {
@@ -67,9 +70,8 @@ async function summarizeWithClaude(
   title: string,
   content: string,
   sourceLanguage: string,
-  apiKey: string,
-  model: string
-): Promise<AISummaryResponse> {
+  apiKey: string
+): Promise<SummarizeResult> {
   const userMessage = `Please summarize this article:
 
 Title: ${title}
@@ -87,7 +89,7 @@ Source language: ${sourceLanguage}`;
       'anthropic-version': '2023-06-01',
     },
     body: JSON.stringify({
-      model,
+      model: MODEL,
       max_tokens: 1024,
       system: SUMMARIZE_PROMPT,
       messages: [{ role: 'user', content: userMessage }],
@@ -106,7 +108,14 @@ Source language: ${sourceLanguage}`;
     throw new Error('No text content in Claude response');
   }
 
-  return JSON.parse(textContent.text);
+  // Extract usage data for cost tracking
+  const usage: ClaudeUsage = {
+    input_tokens: data.usage?.input_tokens || 0,
+    output_tokens: data.usage?.output_tokens || 0,
+  };
+
+  const summary = JSON.parse(textContent.text);
+  return { summary, usage };
 }
 
 serve(async (req) => {
@@ -139,21 +148,31 @@ serve(async (req) => {
       );
     }
 
-    // Select model based on source reliability (cost optimization)
-    const model = selectModel(reliability_score);
-    console.log(`Using model ${model} for story ${story_id} (reliability: ${reliability_score ?? 'unknown'})`);
+    console.log(`Using model ${MODEL} for story ${story_id}`);
 
     // Generate summary with Claude
-    const summary = await summarizeWithClaude(
+    const { summary, usage } = await summarizeWithClaude(
       title,
       content,
       source_language || 'en',
-      claudeApiKey,
-      model
+      claudeApiKey
     );
+
+    // Calculate cost for tracking
+    const cost_usd = (usage.input_tokens * PRICING.input + usage.output_tokens * PRICING.output) / 1_000_000;
 
     // Create Supabase client with service role key
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Log API usage to database
+    await supabase.from('api_usage').insert({
+      function_name: 'summarize-story',
+      model: MODEL,
+      input_tokens: usage.input_tokens,
+      output_tokens: usage.output_tokens,
+      cost_usd,
+      story_id,
+    });
 
     // Get topic IDs from slugs
     const { data: topicsData } = await supabase
@@ -187,7 +206,9 @@ serve(async (req) => {
         success: true,
         story: data,
         summary,
-        model_used: model,
+        model_used: MODEL,
+        cost_usd: Number(cost_usd.toFixed(6)),
+        tokens: usage,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

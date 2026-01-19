@@ -68,6 +68,8 @@ interface RawArticle {
   video_type: string | null;
   published_at: string | null;
   retry_count: number;
+  retry_after: string | null;
+  topic_ids: string[] | null;
   rss_source: {
     language: string;
     name: string;
@@ -75,6 +77,81 @@ interface RawArticle {
     website_url: string | null;
     logo_url: string | null;
   };
+}
+
+interface CircuitBreakerStatus {
+  is_open: boolean;
+  failure_count: number;
+  can_proceed: boolean;
+  cooldown_until?: string;
+  just_reset?: boolean;
+}
+
+// Check circuit breaker status
+async function checkCircuitBreaker(supabase: any): Promise<CircuitBreakerStatus> {
+  try {
+    const { data, error } = await supabase.rpc('get_circuit_breaker_status');
+    if (error || !data) {
+      console.warn('Circuit breaker check failed:', error?.message || 'No data returned');
+      return { is_open: false, failure_count: 0, can_proceed: true };
+    }
+    return data as CircuitBreakerStatus;
+  } catch (e) {
+    console.warn('Circuit breaker exception:', e);
+    return { is_open: false, failure_count: 0, can_proceed: true };
+  }
+}
+
+// Record circuit breaker failure
+async function recordFailure(supabase: any): Promise<void> {
+  try {
+    const result = await supabase.rpc('record_circuit_breaker_failure');
+    if (result?.error) {
+      console.warn('Failed to record circuit breaker failure:', result.error.message);
+    }
+  } catch (e) {
+    console.warn('Exception recording circuit breaker failure:', e);
+  }
+}
+
+// Record circuit breaker success
+async function recordSuccess(supabase: any): Promise<void> {
+  try {
+    const result = await supabase.rpc('record_circuit_breaker_success');
+    if (result?.error) {
+      console.warn('Failed to record circuit breaker success:', result.error.message);
+    }
+  } catch (e) {
+    console.warn('Exception recording circuit breaker success:', e);
+  }
+}
+
+// Log pipeline event
+async function logPipelineEvent(
+  supabase: any,
+  level: 'info' | 'warn' | 'error',
+  message: string,
+  metadata: Record<string, any> = {},
+  articleId?: string
+): Promise<void> {
+  try {
+    await supabase.rpc('log_pipeline_event', {
+      p_function_name: 'process-articles',
+      p_level: level,
+      p_message: message,
+      p_metadata: metadata,
+      p_article_id: articleId || null,
+    });
+  } catch {
+    // Silent fail - logging should not break processing
+  }
+}
+
+// Calculate exponential backoff retry time
+function calculateRetryAfter(retryCount: number): string {
+  const delayMinutes = Math.min(Math.pow(2, retryCount), 60);
+  const retryAt = new Date(Date.now() + delayMinutes * 60 * 1000);
+  return retryAt.toISOString();
 }
 
 interface AISummaryResponse {
@@ -86,20 +163,14 @@ interface AISummaryResponse {
   topics: string[];
 }
 
-// Model tiers for cost optimization
-const MODELS = {
-  premium: 'claude-sonnet-4-20250514',  // Higher quality, higher cost
-  standard: 'claude-3-5-haiku-20241022', // Good quality, ~4x cheaper
-} as const;
+// Model configuration - Sonnet only for best quality
+const MODEL = 'claude-sonnet-4-20250514';
 
-/**
- * Select AI model based on source reliability score
- * - High reliability sources (>0.7) get Sonnet for best quality
- * - Standard sources get Haiku for cost efficiency
- */
-function selectModel(reliabilityScore: number): string {
-  return reliabilityScore > 0.7 ? MODELS.premium : MODELS.standard;
-}
+// Sonnet pricing (per 1M tokens) for cost calculation
+const PRICING = {
+  input: 3.00,   // $3.00 per 1M input tokens
+  output: 15.00, // $15.00 per 1M output tokens
+};
 
 const SUMMARIZE_PROMPT = `You are a news summarization AI for Safha, a Saudi Arabian news app.
 
@@ -115,66 +186,91 @@ Provide:
 
 Respond ONLY with valid JSON.`;
 
+interface ClaudeUsage {
+  input_tokens: number;
+  output_tokens: number;
+}
+
+interface SummarizeResult {
+  summary: AISummaryResponse;
+  usage: ClaudeUsage;
+}
+
 async function summarizeWithClaude(
   title: string,
   content: string,
   sourceLanguage: string,
   sourceName: string,
-  apiKey: string,
-  model: string
-): Promise<AISummaryResponse> {
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model,
-      max_tokens: 1024,
-      system: SUMMARIZE_PROMPT,
-      messages: [{
-        role: 'user',
-        content: `Source: ${sourceName}
+  apiKey: string
+): Promise<SummarizeResult> {
+  // Add 30-second timeout to prevent hanging
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      signal: controller.signal,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: MODEL,
+        max_tokens: 1024,
+        system: SUMMARIZE_PROMPT,
+        messages: [{
+          role: 'user',
+          content: `Source: ${sourceName}
 Language: ${sourceLanguage}
 Title: ${title}
 
 Content:
 ${content.slice(0, 3000)}`,
-      }],
-    }),
-  });
+        }],
+      }),
+    });
 
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Claude API error: ${response.status} - ${error}`);
-  }
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`Claude API error: ${response.status} - ${error}`);
+    }
 
-  const data = await response.json();
-  const textContent = data.content.find((c: { type: string }) => c.type === 'text');
+    const data = await response.json();
+    const textContent = data.content.find((c: { type: string }) => c.type === 'text');
 
-  if (!textContent) {
-    throw new Error('No text content in Claude response');
-  }
+    if (!textContent) {
+      throw new Error('No text content in Claude response');
+    }
 
-  // Strip markdown code blocks if present
-  let jsonText = textContent.text.trim();
-  if (jsonText.startsWith('```json')) {
-    jsonText = jsonText.slice(7);
-  } else if (jsonText.startsWith('```')) {
-    jsonText = jsonText.slice(3);
-  }
-  if (jsonText.endsWith('```')) {
-    jsonText = jsonText.slice(0, -3);
-  }
-  jsonText = jsonText.trim();
+    // Extract usage data for cost tracking
+    const usage: ClaudeUsage = {
+      input_tokens: data.usage?.input_tokens || 0,
+      output_tokens: data.usage?.output_tokens || 0,
+    };
 
-  try {
-    return JSON.parse(jsonText);
-  } catch (parseError) {
-    const errorMsg = parseError instanceof Error ? parseError.message : 'Unknown parse error';
-    throw new Error(`Failed to parse Claude response as JSON: ${errorMsg}. Response preview: ${jsonText.slice(0, 200)}`);
+    // Strip markdown code blocks if present
+    let jsonText = textContent.text.trim();
+    if (jsonText.startsWith('```json')) {
+      jsonText = jsonText.slice(7);
+    } else if (jsonText.startsWith('```')) {
+      jsonText = jsonText.slice(3);
+    }
+    if (jsonText.endsWith('```')) {
+      jsonText = jsonText.slice(0, -3);
+    }
+    jsonText = jsonText.trim();
+
+    const summary = JSON.parse(jsonText);
+    return { summary, usage };
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      throw new Error('Claude API timeout after 30 seconds');
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 
@@ -182,7 +278,7 @@ async function processArticle(
   article: RawArticle,
   supabase: any,
   claudeApiKey: string
-): Promise<{ success: boolean; story_id?: string; error?: string; model_used?: string; skipped?: boolean }> {
+): Promise<{ success: boolean; story_id?: string; error?: string; model_used?: string; skipped?: boolean; cost_usd?: number }> {
   try {
     // Mark as processing
     await supabase
@@ -205,19 +301,29 @@ async function processArticle(
       return { success: false, error: 'Content too short' };
     }
 
-    // Select model based on source reliability (cost optimization)
-    const model = selectModel(article.rss_source.reliability_score);
-    console.log(`Processing "${article.original_title?.slice(0, 30)}..." with ${model} (reliability: ${article.rss_source.reliability_score})`);
+    console.log(`Processing "${article.original_title?.slice(0, 30)}..." with ${MODEL}`);
 
     // Generate AI summary
-    const summary = await summarizeWithClaude(
+    const { summary, usage } = await summarizeWithClaude(
       article.original_title,
       content,
       article.rss_source.language,
       article.rss_source.name,
-      claudeApiKey,
-      model
+      claudeApiKey
     );
+
+    // Calculate cost for tracking
+    const cost_usd = (usage.input_tokens * PRICING.input + usage.output_tokens * PRICING.output) / 1_000_000;
+
+    // Log API usage to database
+    await supabase.from('api_usage').insert({
+      function_name: 'process-articles',
+      model: MODEL,
+      input_tokens: usage.input_tokens,
+      output_tokens: usage.output_tokens,
+      cost_usd,
+      article_id: article.id,
+    });
 
     // Check quality threshold
     if (summary.quality_score < 0.4) {
@@ -386,21 +492,28 @@ async function processArticle(
       })
       .eq('id', article.id);
 
-    return { success: true, story_id: story.id, model_used: model };
+    return { success: true, story_id: story.id, model_used: MODEL, cost_usd };
 
   } catch (error) {
-    // Mark as failed
+    const newRetryCount = (article.retry_count || 0) + 1;
+    const maxRetries = 5;
+
+    // If we've exceeded max retries, mark as permanently failed
+    // Otherwise, set retry_after for exponential backoff
+    const isFinalFailure = newRetryCount >= maxRetries;
+
     await supabase
       .from('raw_articles')
       .update({
-        status: 'failed',
+        status: isFinalFailure ? 'failed' : 'pending',
         error_message: error.message,
-        retry_count: (article.retry_count || 0) + 1,
-        processed_at: new Date().toISOString(),
+        retry_count: newRetryCount,
+        retry_after: isFinalFailure ? null : calculateRetryAfter(newRetryCount),
+        processed_at: isFinalFailure ? new Date().toISOString() : null,
       })
       .eq('id', article.id);
 
-    return { success: false, error: error.message };
+    return { success: false, error: error.message, will_retry: !isFinalFailure };
   }
 }
 
@@ -437,17 +550,59 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+    // Check circuit breaker before processing
+    const circuitBreaker = await checkCircuitBreaker(supabase);
+    if (!circuitBreaker.can_proceed) {
+      console.log(`Circuit breaker is OPEN. Cooldown until: ${circuitBreaker.cooldown_until}`);
+      await logPipelineEvent(supabase, 'warn', 'Circuit breaker is open, skipping processing', {
+        failure_count: circuitBreaker.failure_count,
+        cooldown_until: circuitBreaker.cooldown_until,
+      });
+      return new Response(
+        JSON.stringify({
+          message: 'Circuit breaker is open',
+          cooldown_until: circuitBreaker.cooldown_until,
+          failure_count: circuitBreaker.failure_count,
+        }),
+        { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (circuitBreaker.just_reset) {
+      console.log('Circuit breaker just reset after cooldown');
+      await logPipelineEvent(supabase, 'info', 'Circuit breaker reset after cooldown');
+    }
+
     // Parse optional limit from request
-    // Increased default from 10 to 25 for faster backlog processing
-    let limit = 25;
+    // Keep batch size small to avoid Edge Function timeout (60s limit)
+    let limit = 10;
     try {
       const body = await req.json();
-      if (body.limit) limit = Math.min(body.limit, 50);
+      if (body.limit) limit = Math.min(body.limit, 20);
     } catch {
       // No body or invalid JSON, use default
     }
 
-    // Get pending articles (prioritize by reliability score)
+    // Reset stuck "processing" articles (older than 5 minutes) back to pending
+    // This prevents articles from getting stuck if the function times out
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    const { data: stuckArticles } = await supabase
+      .from('raw_articles')
+      .update({ status: 'pending', retry_after: null })
+      .eq('status', 'processing')
+      .lt('updated_at', fiveMinutesAgo)
+      .select('id');
+
+    if (stuckArticles && stuckArticles.length > 0) {
+      console.log(`Reset ${stuckArticles.length} stuck "processing" articles back to pending`);
+      await logPipelineEvent(supabase, 'warn', `Reset ${stuckArticles.length} stuck articles`, {
+        article_ids: stuckArticles.map((a: { id: string }) => a.id),
+      });
+    }
+
+    // Get pending articles that are ready for processing
+    // Respect retry_after for exponential backoff
+    const now = new Date().toISOString();
     const { data: articles, error: articlesError } = await supabase
       .from('raw_articles')
       .select(`
@@ -455,7 +610,8 @@ serve(async (req) => {
         rss_source:rss_sources(language, name, reliability_score, website_url, logo_url)
       `)
       .eq('status', 'pending')
-      .lt('retry_count', 3)
+      .lt('retry_count', 5)
+      .or(`retry_after.is.null,retry_after.lt.${now}`)
       .order('fetched_at', { ascending: true })
       .limit(limit);
 
@@ -484,16 +640,42 @@ serve(async (req) => {
       await new Promise(resolve => setTimeout(resolve, 500));
     }
 
+    const totalCost = results
+      .filter(r => r.cost_usd)
+      .reduce((sum, r) => sum + (r.cost_usd || 0), 0);
+
+    const successCount = results.filter(r => r.success).length;
+    const failedCount = results.filter(r => !r.success).length;
+
     const summary = {
       total_processed: results.length,
-      successful: results.filter(r => r.success).length,
-      failed: results.filter(r => !r.success).length,
+      successful: successCount,
+      failed: failedCount,
       skipped_duplicates: results.filter(r => r.skipped).length,
-      models: {
-        premium: results.filter(r => r.model_used === MODELS.premium).length,
-        standard: results.filter(r => r.model_used === MODELS.standard).length,
-      },
+      model: MODEL,
+      total_cost_usd: Number(totalCost.toFixed(6)),
     };
+
+    // Update circuit breaker based on results
+    // If ALL articles failed, record a failure
+    // If ANY article succeeded, record success (reset failure count)
+    if (results.length > 0) {
+      if (successCount > 0) {
+        await recordSuccess(supabase);
+      } else if (failedCount === results.length) {
+        await recordFailure(supabase);
+        await logPipelineEvent(supabase, 'error', 'All articles in batch failed', {
+          batch_size: results.length,
+          errors: results.map(r => r.error).filter(Boolean),
+        });
+      }
+    }
+
+    await logPipelineEvent(supabase, 'info', 'Batch processing complete', {
+      successful: successCount,
+      failed: failedCount,
+      total_cost_usd: summary.total_cost_usd,
+    });
 
     return new Response(
       JSON.stringify({ summary, results }),
@@ -501,9 +683,30 @@ serve(async (req) => {
     );
 
   } catch (error) {
-    console.error('Process articles error:', error);
+    // Explicitly log the error with stack trace for debugging
+    const errorMessage = error?.message || String(error) || 'Unknown error';
+    const errorStack = error?.stack || 'No stack trace';
+    console.error('Process articles error:', errorMessage);
+    console.error('Stack trace:', errorStack);
+
+    // Record circuit breaker failure for unhandled errors
+    try {
+      const supabaseUrl = Deno.env.get('SUPABASE_URL');
+      const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+      if (supabaseUrl && supabaseServiceKey) {
+        const supabase = createClient(supabaseUrl, supabaseServiceKey);
+        await recordFailure(supabase);
+        await logPipelineEvent(supabase, 'error', 'Unhandled error in process-articles', {
+          error: errorMessage,
+          stack: errorStack,
+        });
+      }
+    } catch (innerError) {
+      console.error('Failed to log error to database:', innerError);
+    }
+
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: errorMessage }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }

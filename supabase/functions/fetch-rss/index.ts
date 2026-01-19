@@ -73,6 +73,99 @@ async function generateContentHash(content: string): Promise<string> {
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 32);
 }
 
+// Detect and resolve Google News redirect URLs to actual article URLs
+// Google News RSS feeds provide redirect URLs (news.google.com/articles/...)
+// that don't contain article images or content - we need the real article URL
+async function resolveGoogleNewsUrl(url: string): Promise<string> {
+  // Check if this is a Google News article URL
+  if (!url.includes('news.google.com/articles/') &&
+      !url.includes('news.google.com/rss/articles/')) {
+    return url; // Not a Google News URL, return as-is
+  }
+
+  console.log(`[resolveGoogleNewsUrl] Resolving Google News URL: ${url}`);
+
+  try {
+    // Method 1: Follow HTTP redirects with HEAD request (fast, no body download)
+    const headResponse = await fetch(url, {
+      method: 'HEAD',
+      redirect: 'follow',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      },
+    });
+
+    // Check if redirected to actual article
+    const finalUrl = headResponse.url;
+    if (finalUrl && !finalUrl.includes('news.google.com') && !finalUrl.includes('google.com/articles')) {
+      console.log(`[resolveGoogleNewsUrl] HEAD redirect resolved: ${url} → ${finalUrl}`);
+      return finalUrl;
+    }
+
+    // Method 2: GET request and follow redirects (some sites need full request)
+    const getResponse = await fetch(url, {
+      method: 'GET',
+      redirect: 'follow',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9,ar;q=0.8',
+      },
+    });
+
+    // Check response URL after redirects
+    if (getResponse.url && !getResponse.url.includes('news.google.com') && !getResponse.url.includes('google.com/articles')) {
+      console.log(`[resolveGoogleNewsUrl] GET redirect resolved: ${url} → ${getResponse.url}`);
+      return getResponse.url;
+    }
+
+    // Method 3: Parse HTML and extract og:url or canonical link
+    const html = await getResponse.text();
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+
+    if (doc) {
+      // Check og:url meta tag
+      const ogUrl = doc.querySelector('meta[property="og:url"]');
+      if (ogUrl) {
+        const content = ogUrl.getAttribute('content');
+        if (content && !content.includes('news.google.com')) {
+          console.log(`[resolveGoogleNewsUrl] Found og:url: ${content}`);
+          return content;
+        }
+      }
+
+      // Check canonical link
+      const canonical = doc.querySelector('link[rel="canonical"]');
+      if (canonical) {
+        const href = canonical.getAttribute('href');
+        if (href && !href.includes('news.google.com')) {
+          console.log(`[resolveGoogleNewsUrl] Found canonical: ${href}`);
+          return href;
+        }
+      }
+
+      // Method 4: Look for article link in Google News page structure
+      // Google News sometimes embeds the actual URL in a data attribute or link
+      const articleLink = doc.querySelector('a[data-n-au], a[href*="http"]:not([href*="google.com"])');
+      if (articleLink) {
+        const href = articleLink.getAttribute('href') || articleLink.getAttribute('data-n-au');
+        if (href && href.startsWith('http') && !href.includes('google.com')) {
+          console.log(`[resolveGoogleNewsUrl] Found article link: ${href}`);
+          return href;
+        }
+      }
+    }
+
+    // Could not resolve - return original URL
+    console.log(`[resolveGoogleNewsUrl] Could not resolve, using original: ${url}`);
+    return url;
+  } catch (error) {
+    console.error(`[resolveGoogleNewsUrl] Error resolving ${url}:`, error.message || error);
+    return url; // On error, return original URL
+  }
+}
+
 // Extract image URL from RSS item
 function extractImageUrl(item: any): string | null {
   // 1. Enclosure with image MIME type
@@ -859,7 +952,7 @@ async function fetchRSSSource(
     // Process each entry
     for (const entry of feed.entries) {
       const guid = entry.id || entry.links?.[0]?.href || entry.title?.value;
-      const url = entry.links?.[0]?.href || entry.id;
+      const rssUrl = entry.links?.[0]?.href || entry.id; // Original URL from RSS feed
       const title = entry.title?.value || '';
       const content = entry.content?.value || entry.description?.value || '';
       const description = entry.description?.value || '';
@@ -868,7 +961,11 @@ async function fetchRSSSource(
       let imageUrl = extractImageUrl(entry);
       const videoInfo = extractVideoUrl(entry);
 
-      if (!url || !title) continue;
+      if (!rssUrl || !title) continue;
+
+      // Resolve Google News redirect URLs to actual article URLs
+      // Google News RSS feeds provide redirect URLs that don't contain images/content
+      const url = await resolveGoogleNewsUrl(rssUrl);
 
       // Resolve relative URLs from RSS extraction
       if (imageUrl) {
@@ -876,6 +973,7 @@ async function fetchRSSSource(
       }
 
       // Fetch webpage data (image fallback + full article content + video)
+      // Uses the resolved actual article URL, not the Google News redirect
       let fullContent: string | null = null;
       let contentQuality = 0;
       let webpageVideoUrl: string | null = null;
